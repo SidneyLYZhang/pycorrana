@@ -61,7 +61,7 @@ interactive = [
 
 [project.urls]
 Homepage = "https://github.com/sidneylyzhang/pycorrana"
-Documentation = "https://pycorrana.readthedocs.io"
+Documentation = "https://pycorrana.readthedocs.io/"
 Repository = "https://github.com/sidneylyzhang/pycorrana"
 Issues = "https://github.com/sidneylyzhang/pycorrana/issues"
 
@@ -75,3 +75,4 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = "-v --tb=short"
+pythonpath = ["src"]
