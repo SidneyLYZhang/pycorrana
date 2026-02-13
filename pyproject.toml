@@ -1,0 +1,77 @@
+[project]
+name = "pycorrana"
+version = "0.1.0"
+description = "Python Correlation Analysis Toolkit - 自动化相关性分析工具"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    { name = "Sidney Zhang", email = "zly@lyzhang.me" }
+]
+keywords = ["correlation", "analysis", "statistics", "data-science", "visualization"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "matplotlib>=3.5.0",
+    "numpy>=1.21.0",
+    "openpyxl>=3.0.0",
+    "pandas>=1.3.0",
+    "polars>=0.15.0",
+    "rich>=13.0.0",
+    "scikit-learn>=1.0.0",
+    "scipy>=1.7.0",
+    "seaborn>=0.11.0",
+    "statsmodels>=0.13.0",
+    "typer>=0.9.0",
+]
+
+[project.scripts]
+pycorrana = "pycorrana.cli.main_cli:main"
+pycorrana-interactive = "pycorrana.cli.interactive:app"
+
+[project.optional-dependencies]
+dev = [
+    "black>=26.1.0",
+    "flake8>=7.3.0",
+    "mypy>=1.19.1",
+    "pytest>=9.0.2",
+    "pytest-cov>=7.0.0",
+]
+docs = [
+    "sphinx>=7.0.0",
+    "sphinx-rtd-theme>=2.0.0",
+]
+interactive = [
+    "ipython>=8.0.0",
+    "jupyter>=1.0.0",
+]
+
+
+[project.urls]
+Homepage = "https://github.com/sidneylyzhang/pycorrana"
+Documentation = "https://pycorrana.readthedocs.io"
+Repository = "https://github.com/sidneylyzhang/pycorrana"
+Issues = "https://github.com/sidneylyzhang/pycorrana/issues"
+
+[build-system]
+requires = ["uv_build>=0.10.2,<0.11.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
