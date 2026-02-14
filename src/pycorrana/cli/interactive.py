@@ -6,8 +6,7 @@
 
 import os
 import sys
-from pathlib import Path
-from typing import Optional, List
+from typing import Optional
 
 import pandas as pd
 import numpy as np
@@ -17,10 +16,9 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.prompt import Prompt, Confirm, IntPrompt, FloatPrompt
-from rich import print as rprint
 
 from ..core.analyzer import quick_corr, CorrAnalyzer
-from ..core.partial_corr import partial_corr, PartialCorrAnalyzer
+from ..core.partial_corr import PartialCorrAnalyzer
 from ..core.nonlinear import NonlinearAnalyzer
 from ..utils.data_utils import load_data, infer_types, handle_missing, detect_outliers
 

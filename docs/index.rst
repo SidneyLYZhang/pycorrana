@@ -28,6 +28,7 @@ PyCorrAna 是一个方便快速入手的 Python 相关性分析工具，核心�
 - **结果导出** - Excel/CSV/HTML/Markdown 结果
 - **偏相关分析** - 控制协变量后的净相关分析
 - **非线性检测** - 距离相关、互信息、MIC
+- **大数据优化** - 智能采样、分块计算、内存优化
 
 目录
 ====
@@ -76,6 +77,17 @@ PyCorrAna 是一个方便快速入手的 Python 相关性分析工具，核心�
 .. code-block:: python
 
    result = quick_corr(df, target='sales')
+
+大数据优化：
+
+.. code-block:: python
+
+   from pycorrana import CorrAnalyzer
+   from pycorrana.utils import LargeDataConfig
+
+   config = LargeDataConfig(sample_size=100000, auto_sample=True)
+   analyzer = CorrAnalyzer(large_df, large_data_config=config)
+   analyzer.fit()
 
 使用命令行工具：
 

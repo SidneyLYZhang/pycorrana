@@ -38,13 +38,15 @@ analyze - 完整分析
 
 选项：
 
-- ``--target TARGET`` - 目标变量名
-- ``--method METHOD`` - 相关系数方法（auto/pearson/spearman/kendall）
-- ``--columns COL1,COL2`` - 指定分析的列
-- ``--export PATH`` - 导出结果路径
-- ``--plot`` - 生成可视化图表
+- ``--target, -t TARGET`` - 目标变量名
+- ``--method, -m METHOD`` - 相关系数方法（auto/pearson/spearman/kendall）
+- ``--columns, -c COL1,COL2`` - 指定分析的列，逗号分隔
+- ``--export, -e PATH`` - 导出结果路径
+- ``--no-plot`` - 不生成图表
 - ``--missing STRATEGY`` - 缺失值处理策略（warn/drop/fill）
-- ``--fill METHOD`` - 填充方法（mean/median/mode/knn）
+- ``--fill-method METHOD`` - 填充方法（mean/median/mode/knn）
+- ``--pvalue-correction METHOD`` - p值校正方法
+- ``--verbose, -v`` - 输出详细信息
 
 示例：
 
@@ -52,7 +54,7 @@ analyze - 完整分析
 
    pycorrana analyze data.csv --target sales --export results.xlsx
 
-   pycorrana analyze data.csv --method spearman --plot
+   pycorrana analyze data.csv --method spearman --verbose
 
    pycorrana analyze data.csv --columns age,income,education --export output/
 
@@ -67,10 +69,11 @@ clean - 数据清洗
 
 选项：
 
+- ``--output, -o PATH`` - 输出文件路径（必需）
 - ``--dropna`` - 删除缺失值
-- ``--fillna METHOD`` - 填充缺失值方法
-- ``--output PATH`` - 输出文件路径
+- ``--fill METHOD`` - 填充缺失值方法（mean/median/mode/knn）
 - ``--detect-outliers`` - 检测异常值
+- ``--outlier-method METHOD`` - 异常值检测方法（iqr/zscore）
 
 示例：
 
@@ -78,7 +81,9 @@ clean - 数据清洗
 
    pycorrana clean data.csv --dropna --output cleaned.csv
 
-   pycorrana clean data.csv --fillna mean --output filled.csv
+   pycorrana clean data.csv --fill knn --output filled.csv
+
+   pycorrana clean data.csv --detect-outliers --outlier-method iqr --output clean.csv
 
 partial - 偏相关分析
 ~~~~~~~~~~~~~~~~~~~~
@@ -91,16 +96,21 @@ partial - 偏相关分析
 
 选项：
 
-- ``-x, --var-x VAR`` - 第一个变量
-- ``-y, --var-y VAR`` - 第二个变量
-- ``-c, --covars VAR1,VAR2`` - 协变量列表
-- ``--output PATH`` - 输出文件路径
+- ``-x VAR`` - 第一个变量（必需）
+- ``-y VAR`` - 第二个变量（必需）
+- ``-c, --covars VAR1,VAR2`` - 协变量列表，逗号分隔（必需）
+- ``--method METHOD`` - 相关方法（pearson/spearman）
+- ``--matrix`` - 计算偏相关矩阵
 
 示例：
 
 .. code-block:: bash
 
    pycorrana partial data.csv -x income -y happiness -c age,education
+
+   pycorrana partial data.csv -x income -y happiness -c age --method spearman
+
+   pycorrana partial data.csv -c age,education --matrix
 
 nonlinear - 非线性检测
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -159,9 +169,10 @@ info - 数据信息
 
 .. code-block:: text
 
-   ==========================================
-   PyCorrAna 交互式分析工具
-   ==========================================
+   ╭──────────────────────────────────────────╮
+   │  PyCorrAna - 交互式相关性分析工具        │
+   │  自动化相关性分析，降低决策成本          │
+   ╰──────────────────────────────────────────╯
    
    请选择操作：
    1. 加载数据
@@ -239,36 +250,6 @@ info - 数据信息
 - HTML 报告
 - 图片文件
 
-配置文件
-========
-
-可以使用配置文件保存常用设置：
-
-创建配置文件 ``.pycorrana.yaml``：
-
-.. code-block:: yaml
-
-   default:
-     method: auto
-     missing_strategy: warn
-     pvalue_correction: fdr_bh
-     plot: true
-   
-   export:
-     format: excel
-     include_summary: true
-   
-   visualization:
-     figsize: [12, 10]
-     cmap: RdBu_r
-     annot: true
-
-使用配置文件：
-
-.. code-block:: bash
-
-   pycorrana analyze data.csv --config .pycorrana.yaml
-
 帮助信息
 ========
 
@@ -280,6 +261,7 @@ info - 数据信息
    pycorrana --help
    pycorrana analyze --help
    pycorrana partial --help
+   pycorrana nonlinear --help
 
 查看版本
 --------

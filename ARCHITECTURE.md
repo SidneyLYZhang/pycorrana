@@ -10,24 +10,25 @@ PyCorrAna 是一个 Python 相关性分析工具包，设计理念是**自动化
 
 ```
 pycorrana/
-├── pycorrana/              # 主包
-│   ├── __init__.py         # 包入口，导出主要API
-│   ├── datasets.py         # 示例数据集
-│   ├── core/               # 核心分析模块
-│   │   ├── analyzer.py     # 主分析器（quick_corr, CorrAnalyzer）
-│   │   ├── visualizer.py   # 可视化（热力图、散点图等）
-│   │   ├── reporter.py     # 报告生成（Excel/HTML/Markdown）
-│   │   ├── partial_corr.py # 偏相关分析
-│   │   └── nonlinear.py    # 非线性依赖检测
-│   ├── utils/              # 工具函数
-│   │   ├── data_utils.py   # 数据处理（加载、清洗、类型推断）
-│   │   └── stats_utils.py  # 统计工具（p值校正、系数解释）
-│   └── cli/                # 命令行工具
-│       ├── main_cli.py     # 分模块CLI
-│       └── interactive.py  # 交互式CLI
-├── tests/                  # 测试
-├── examples/               # 示例代码
-└── docs/                   # 文档
+├── src/pycorrana/              # 主包
+│   ├── __init__.py             # 包入口，导出主要API
+│   ├── datasets.py             # 示例数据集
+│   ├── core/                   # 核心分析模块
+│   │   ├── analyzer.py         # 主分析器（quick_corr, CorrAnalyzer）
+│   │   ├── visualizer.py       # 可视化（热力图、散点图等）
+│   │   ├── reporter.py         # 报告生成（Excel/HTML/Markdown）
+│   │   ├── partial_corr.py     # 偏相关分析
+│   │   └── nonlinear.py        # 非线性依赖检测
+│   ├── utils/                  # 工具函数
+│   │   ├── data_utils.py       # 数据处理（加载、清洗、类型推断）
+│   │   ├── stats_utils.py      # 统计工具（p值校正、系数解释）
+│   │   └── large_data.py       # 大数据优化（采样、分块计算）
+│   └── cli/                    # 命令行工具
+│       ├── main_cli.py         # 分模块CLI
+│       └── interactive.py      # 交互式CLI
+├── tests/                      # 测试
+├── examples/                   # 示例代码
+└── docs/                       # 文档
 ```
 
 ### 2. 数据流水线
@@ -40,6 +41,12 @@ pycorrana/
     - infer_types(): 自动类型推断
     - handle_missing(): 缺失值处理
     - detect_outliers(): 异常值检测
+    - is_large_data(): 大数据检测
+    ↓
+[大数据优化] (可选)
+    - smart_sample(): 智能采样
+    - optimize_dataframe(): 内存优化
+    - chunked_correlation(): 分块计算
     ↓
 [相关性计算引擎]
     - 自动方法选择（根据变量类型）
@@ -74,6 +81,11 @@ pycorrana/
 - `export_results()`: 导出结果
 - `summary()`: 文本摘要
 
+**大数据支持：**
+- 自动检测大数据集
+- 支持 `LargeDataConfig` 配置
+- 自动采样和内存优化
+
 #### 3.2 visualizer.py - 可视化
 
 **主要类：**
@@ -102,6 +114,7 @@ pycorrana/
 **主要函数/类：**
 - `partial_corr()`: 计算偏相关系数
 - `partial_corr_matrix()`: 偏相关矩阵
+- `semipartial_corr()`: 半偏相关（部分相关）
 - `PartialCorrAnalyzer`: 偏相关分析器类
 
 #### 3.5 nonlinear.py - 非线性检测
@@ -110,7 +123,17 @@ pycorrana/
 - `distance_correlation()`: 距离相关
 - `mutual_info_score()`: 互信息
 - `maximal_information_coefficient()`: MIC
+- `nonlinear_dependency_report()`: 非线性依赖报告
 - `NonlinearAnalyzer`: 非线性分析器类
+
+#### 3.6 large_data.py - 大数据优化
+
+**主要函数/类：**
+- `LargeDataConfig`: 大数据配置类
+- `smart_sample()`: 智能采样（支持分层采样）
+- `chunked_correlation()`: 分块计算相关性
+- `chunked_apply()`: 分块应用函数
+- `optimize_dataframe()`: 内存优化
 
 ### 4. 自动方法选择规则
 
@@ -193,11 +216,15 @@ def to_new_format(self, ...):
 pycorrana
 ├── numpy (数组计算)
 ├── pandas (数据处理)
+├── polars (高性能数据处理)
 ├── scipy (统计检验)
 ├── matplotlib (基础绘图)
 ├── seaborn (高级可视化)
 ├── statsmodels (统计模型)
-└── scikit-learn (机器学习工具)
+├── scikit-learn (机器学习工具)
+├── typer (CLI框架)
+├── rich (终端美化)
+└── openpyxl (Excel支持)
 ```
 
 ### 8. 设计原则
@@ -219,10 +246,17 @@ pycorrana
 | 交互式分析 | `pycorrana-interactive` |
 | 控制混淆变量 | `partial_corr(df, x, y, covars)` |
 | 检测非线性 | `nonlinear_dependency_report(df)` |
+| 大数据集 | `CorrAnalyzer(df, large_data_config=config)` |
 
 ### 10. 性能考虑
 
-- 大数据集：使用 `columns` 参数限制分析列
-- 内存优化：使用 `missing_strategy='drop'` 减少数据量
+- 大数据集：使用 `LargeDataConfig` 配置自动采样
+- 内存优化：使用 `optimize_dataframe()` 减少内存占用
 - 计算加速：使用 `method='spearman'` 避免正态性检验
+- 分块计算：使用 `chunked_correlation()` 处理超大矩阵
 - 可视化：限制散点图矩阵的列数（<=6）
+
+### 11. Python 版本支持
+
+- 最低版本：Python 3.10
+- 支持版本：Python 3.10, 3.11, 3.12, 3.13

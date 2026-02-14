@@ -106,97 +106,134 @@ CorrReporter 类
    :members:
    :inherited-members:
 
-数据工具模块
+数据处理工具
 ============
 
 .. module:: pycorrana.utils.data_utils
 
-数据加载
---------
+load_data 函数
+--------------
 
 .. autofunction:: pycorrana.utils.data_utils.load_data
 
-类型推断
---------
+infer_types 函数
+----------------
 
 .. autofunction:: pycorrana.utils.data_utils.infer_types
 
-缺失值处理
-----------
+handle_missing 函数
+-------------------
 
 .. autofunction:: pycorrana.utils.data_utils.handle_missing
 
-异常值检测
-----------
+detect_outliers 函数
+--------------------
 
 .. autofunction:: pycorrana.utils.data_utils.detect_outliers
 
-统计工具模块
-============
+is_large_data 函数
+------------------
+
+.. autofunction:: pycorrana.utils.data_utils.is_large_data
+
+estimate_memory_usage 函数
+--------------------------
+
+.. autofunction:: pycorrana.utils.data_utils.estimate_memory_usage
+
+统计工具
+========
 
 .. module:: pycorrana.utils.stats_utils
 
-正态性检验
-----------
+check_normality 函数
+--------------------
 
 .. autofunction:: pycorrana.utils.stats_utils.check_normality
 
-p 值校正
---------
+correct_pvalues 函数
+--------------------
 
 .. autofunction:: pycorrana.utils.stats_utils.correct_pvalues
 
-Cramér's V
-----------
+cramers_v 函数
+--------------
 
 .. autofunction:: pycorrana.utils.stats_utils.cramers_v
 
-Eta 系数
---------
+eta_coefficient 函数
+--------------------
 
 .. autofunction:: pycorrana.utils.stats_utils.eta_coefficient
 
-点双列相关
-----------
+point_biserial 函数
+-------------------
 
 .. autofunction:: pycorrana.utils.stats_utils.point_biserial
 
-相关系数解释
-------------
+interpret_correlation 函数
+--------------------------
 
 .. autofunction:: pycorrana.utils.stats_utils.interpret_correlation
 
-数据集模块
+大数据优化模块
+==============
+
+.. module:: pycorrana.utils.large_data
+
+LargeDataConfig 类
+------------------
+
+.. autoclass:: pycorrana.utils.large_data.LargeDataConfig
+   :members:
+   :inherited-members:
+
+smart_sample 函数
+-----------------
+
+.. autofunction:: pycorrana.utils.large_data.smart_sample
+
+chunked_correlation 函数
+------------------------
+
+.. autofunction:: pycorrana.utils.large_data.chunked_correlation
+
+chunked_apply 函数
+------------------
+
+.. autofunction:: pycorrana.utils.large_data.chunked_apply
+
+optimize_dataframe 函数
+-----------------------
+
+.. autofunction:: pycorrana.utils.large_data.optimize_dataframe
+
+示例数据集
 ==========
 
 .. module:: pycorrana.datasets
 
-示例数据集
-----------
+load_iris 函数
+--------------
 
-.. autofunction:: pycorrana.load_iris
+.. autofunction:: pycorrana.datasets.load_iris
 
-.. autofunction:: pycorrana.load_titanic
+load_titanic 函数
+-----------------
 
-.. autofunction:: pycorrana.load_wine
+.. autofunction:: pycorrana.datasets.load_titanic
 
-.. autofunction:: pycorrana.make_correlated_data
+load_wine 函数
+--------------
 
-.. autofunction:: pycorrana.list_datasets
+.. autofunction:: pycorrana.datasets.load_wine
 
-命令行模块
-==========
+make_correlated_data 函数
+-------------------------
 
-.. module:: pycorrana.cli
+.. autofunction:: pycorrana.datasets.make_correlated_data
 
-主命令行工具
-------------
+list_datasets 函数
+------------------
 
-.. automodule:: pycorrana.cli.main_cli
-   :members:
-
-交互式工具
-----------
-
-.. automodule:: pycorrana.cli.interactive
-   :members:
+.. autofunction:: pycorrana.datasets.list_datasets

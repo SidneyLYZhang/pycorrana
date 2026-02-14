@@ -19,6 +19,54 @@ except ImportError:
     pl = None
 
 
+LARGE_DATA_THRESHOLD_ROWS = 100_000
+LARGE_DATA_THRESHOLD_MEMORY_MB = 500
+
+
+def estimate_memory_usage(df: pd.DataFrame) -> float:
+    """
+    估算DataFrame的内存使用量（MB）。
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        输入数据
+        
+    Returns
+    -------
+    float
+        内存使用量（MB）
+    """
+    return df.memory_usage(deep=True).sum() / (1024 * 1024)
+
+
+def is_large_data(df: pd.DataFrame,
+                  threshold_rows: int = LARGE_DATA_THRESHOLD_ROWS,
+                  threshold_memory_mb: float = LARGE_DATA_THRESHOLD_MEMORY_MB) -> bool:
+    """
+    判断数据是否为大数据集。
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        输入数据
+    threshold_rows : int
+        行数阈值
+    threshold_memory_mb : float
+        内存阈值（MB）
+        
+    Returns
+    -------
+    bool
+        是否为大数据集
+    """
+    if len(df) > threshold_rows:
+        return True
+    if estimate_memory_usage(df) > threshold_memory_mb:
+        return True
+    return False
+
+
 def load_data(data: Union[str, Path, pd.DataFrame, "pl.DataFrame"]) -> pd.DataFrame:
     """
     智能数据加载器，支持多种输入格式。

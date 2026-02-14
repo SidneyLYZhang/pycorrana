@@ -44,6 +44,7 @@ PyCorrAna 是一个**方便快速入手**的 Python 相关性分析工具，核�
 | **结果导出** | Excel/CSV/HTML/Markdown 结果 |
 | **偏相关分析** | 控制协变量后的净相关分析 |
 | **非线性检测** | 距离相关、互信息、MIC |
+| **大数据优化** | 智能采样、分块计算、内存优化 |
 
 ---
 
@@ -57,10 +58,12 @@ pip install pycorrana
 pip install pycorrana[all]
 
 # 开发模式安装
-git clone https://github.com/yourusername/pycorrana.git
+git clone https://github.com/sidneylyzhang/pycorrana.git
 cd pycorrana
 pip install -e .
 ```
+
+另外，我个人建议还是使用 `uv` 进行安装，可以获得更好的使用体验，也不会过多影响当前的python环境，也可以更方便的使用工具自带的两个命令行工具。
 
 ---
 
@@ -172,10 +175,29 @@ analyzer.export_results('results.xlsx', format='excel')
 print(analyzer.summary())
 ```
 
-### 示例 4: 偏相关分析
+### 示例 4: 大数据集优化
 
 ```python
-from pycorrana import partial_corr, partial_corr_matrix
+from pycorrana import CorrAnalyzer
+from pycorrana.utils import LargeDataConfig
+
+# 配置大数据优化参数
+config = LargeDataConfig(
+    sample_size=100000,      # 采样大小
+    auto_sample=True,        # 自动采样
+    auto_optimize=True,      # 自动优化内存
+    verbose=True
+)
+
+# 使用配置分析大数据集
+analyzer = CorrAnalyzer(large_df, large_data_config=config)
+analyzer.fit()
+```
+
+### 示例 5: 偏相关分析
+
+```python
+from pycorrana import partial_corr, partial_corr_matrix, semipartial_corr
 
 # 控制年龄后，计算收入与幸福感的偏相关
 result = partial_corr(
@@ -190,12 +212,15 @@ print(f"偏相关系数: {result['partial_correlation']:.3f}")
 print(f"p值: {result['p_value']:.4e}")
 print(f"95% CI: [{result['ci_95'][0]:.3f}, {result['ci_95'][1]:.3f}]")
 
+# 半偏相关（部分相关）
+result = semipartial_corr(df, x='income', y='happiness', covars='age')
+
 # 偏相关矩阵
 pcorr_matrix = partial_corr_matrix(df, covars='age')
 print(pcorr_matrix)
 ```
 
-### 示例 5: 非线性依赖检测
+### 示例 6: 非线性依赖检测
 
 ```python
 from pycorrana import distance_correlation, mutual_info_score
@@ -214,7 +239,7 @@ report = nonlinear_dependency_report(df, top_n=10)
 print(report)
 ```
 
-### 示例 6: 数据清洗和预处理
+### 示例 7: 数据清洗和预处理
 
 ```python
 from pycorrana.utils.data_utils import load_data, handle_missing, detect_outliers
@@ -258,7 +283,7 @@ PyCorrAna 根据变量类型自动选择最优的相关系数方法：
 
 ```
 pycorrana/
-├── pycorrana/
+├── src/pycorrana/            # 源代码
 │   ├── __init__.py           # 包入口
 │   ├── core/                 # 核心分析模块
 │   │   ├── analyzer.py       # 主分析器
@@ -268,7 +293,8 @@ pycorrana/
 │   │   └── nonlinear.py      # 非线性检测
 │   ├── utils/                # 工具函数
 │   │   ├── data_utils.py     # 数据处理
-│   │   └── stats_utils.py    # 统计工具
+│   │   ├── stats_utils.py    # 统计工具
+│   │   └── large_data.py     # 大数据优化
 │   ├── cli/                  # 命令行工具
 │   │   ├── main_cli.py       # 主CLI
 │   │   └── interactive.py    # 交互式CLI
@@ -276,8 +302,7 @@ pycorrana/
 ├── tests/                    # 测试
 ├── examples/                 # 示例代码
 ├── docs/                     # 文档
-├── setup.py                  # 安装配置
-├── requirements.txt          # 依赖
+├── pyproject.toml            # 项目配置
 └── README.md                 # 本文件
 ```
 
@@ -285,14 +310,18 @@ pycorrana/
 
 ## 依赖
 
-- Python >= 3.8
+- Python >= 3.10
 - numpy >= 1.21.0
 - pandas >= 1.3.0
 - scipy >= 1.7.0
-- matplotlib >= 3.4.0
+- matplotlib >= 3.5.0
 - seaborn >= 0.11.0
 - statsmodels >= 0.13.0
 - scikit-learn >= 1.0.0
+- polars >= 0.15.0
+- typer >= 0.9.0
+- rich >= 13.0.0
+- openpyxl >= 3.0.0
 
 ---
 

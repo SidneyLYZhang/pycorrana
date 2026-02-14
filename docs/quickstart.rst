@@ -95,6 +95,52 @@ PyCorrAna 的核心设计理念是简化分析流程。使用 :func:`pycorrana.q
    * - pvalue_correction
      - 'fdr_bh'
      - p 值校正方法
+   * - large_data_config
+     - None
+     - 大数据优化配置
+
+大数据优化
+==========
+
+PyCorrAna 提供了针对大数据集的优化策略。
+
+自动检测大数据
+--------------
+
+PyCorrAna 会自动检测大数据集（默认阈值：10万行或500MB）并提示优化建议。
+
+配置大数据优化
+--------------
+
+使用 ``LargeDataConfig`` 配置大数据优化参数：
+
+.. code-block:: python
+
+   from pycorrana import CorrAnalyzer
+   from pycorrana.utils import LargeDataConfig
+
+   config = LargeDataConfig(
+       sample_size=100000,      # 采样大小
+       auto_sample=True,        # 自动采样
+       auto_optimize=True,      # 自动优化内存
+       verbose=True
+   )
+
+   analyzer = CorrAnalyzer(large_df, large_data_config=config)
+   analyzer.fit()
+
+智能采样
+--------
+
+.. code-block:: python
+
+   from pycorrana.utils import smart_sample
+
+   # 随机采样
+   sampled_df = smart_sample(df, sample_size=50000)
+
+   # 分层采样
+   sampled_df = smart_sample(df, sample_size=50000, stratify_col='category')
 
 可视化
 ======
@@ -186,7 +232,7 @@ PyCorrAna 提供了几个内置示例数据集：
    df = make_correlated_data(
        n_samples=1000,
        n_features=10,
-       correlation_strength=0.7
+       correlation=0.7
    )
 
 命令行工具
@@ -241,12 +287,22 @@ PyCorrAna 提供了命令行工具，无需编写代码即可进行分析：
 
    from pycorrana import partial_corr
 
-   r, p = partial_corr(
+   result = partial_corr(
        df,
        x='income',
        y='happiness',
        covars=['age', 'education']
    )
+   print(f"偏相关系数: {result['partial_correlation']:.3f}")
+
+半偏相关
+--------
+
+.. code-block:: python
+
+   from pycorrana import semipartial_corr
+
+   result = semipartial_corr(df, x='income', y='happiness', covars='age')
 
 非线性依赖检测
 --------------
@@ -261,8 +317,11 @@ PyCorrAna 提供了命令行工具，无需编写代码即可进行分析：
        nonlinear_dependency_report
    )
 
-   dcor = distance_correlation(df['x'], df['y'])
-   mi = mutual_info_score(df['x'], df['y'])
+   result = distance_correlation(df['x'], df['y'], return_pvalue=True)
+   print(f"dCor: {result['dcor']:.3f}")
+   
+   result = mutual_info_score(df['x'], df['y'])
+   print(f"MI: {result['mi_normalized']:.3f}")
    
    report = nonlinear_dependency_report(df)
 

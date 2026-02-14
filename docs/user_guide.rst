@@ -207,6 +207,100 @@ p 值校正
    for pair in significant_pairs:
        print(f"{pair['var1']} - {pair['var2']}: r={pair['correlation']:.3f}, p={pair['p_value']:.4f}")
 
+大数据优化
+==========
+
+PyCorrAna 提供了针对大数据集的优化策略。
+
+自动检测大数据
+--------------
+
+PyCorrAna 会自动检测大数据集：
+
+.. code-block:: python
+
+   from pycorrana.utils.data_utils import is_large_data, estimate_memory_usage
+
+   # 检测是否为大数据
+   if is_large_data(df):
+       print("检测到大数据集")
+
+   # 查看内存使用
+   mem_mb = estimate_memory_usage(df)
+   print(f"内存使用: {mem_mb:.1f} MB")
+
+配置大数据优化
+--------------
+
+使用 ``LargeDataConfig`` 配置大数据优化参数：
+
+.. code-block:: python
+
+   from pycorrana import CorrAnalyzer
+   from pycorrana.utils import LargeDataConfig
+
+   config = LargeDataConfig(
+       sample_size=100000,      # 采样大小
+       auto_sample=True,        # 自动采样
+       auto_optimize=True,      # 自动优化内存
+       stratify_col=None,       # 分层采样列
+       random_state=42,         # 随机种子
+       verbose=True
+   )
+
+   analyzer = CorrAnalyzer(large_df, large_data_config=config)
+   analyzer.fit()
+
+智能采样
+--------
+
+手动使用采样功能：
+
+.. code-block:: python
+
+   from pycorrana.utils import smart_sample
+
+   # 随机采样
+   sampled_df = smart_sample(
+       df,
+       sample_size=50000,
+       random_state=42
+   )
+
+   # 分层采样
+   sampled_df = smart_sample(
+       df,
+       sample_size=50000,
+       stratify_col='category',  # 按此列分层
+       random_state=42
+   )
+
+内存优化
+--------
+
+.. code-block:: python
+
+   from pycorrana.utils import optimize_dataframe
+
+   # 优化 DataFrame 内存使用
+   optimized_df = optimize_dataframe(df, verbose=True)
+
+分块计算
+--------
+
+对于超大矩阵，可以使用分块计算：
+
+.. code-block:: python
+
+   from pycorrana.utils import chunked_correlation
+
+   # 分块计算相关性
+   corr_matrix = chunked_correlation(
+       df,
+       chunk_size=10000,
+       method='spearman'
+   )
+
 可视化
 ======
 
@@ -310,12 +404,14 @@ CSV 导出
 
    from pycorrana import partial_corr
 
-   r, p = partial_corr(
+   result = partial_corr(
        df,
        x='income',
        y='happiness',
        covars=['age', 'education']
    )
+   print(f"偏相关系数: {result['partial_correlation']:.3f}")
+   print(f"p值: {result['p_value']:.4e}")
 
 偏相关矩阵
 ----------
@@ -337,7 +433,7 @@ CSV 导出
 
    from pycorrana import semipartial_corr
 
-   r, p = semipartial_corr(
+   result = semipartial_corr(
        df,
        x='income',
        y='happiness',
@@ -356,8 +452,9 @@ CSV 导出
 
    from pycorrana import distance_correlation
 
-   dcor = distance_correlation(df['x'], df['y'])
-   print(f"距离相关系数: {dcor:.4f}")
+   result = distance_correlation(df['x'], df['y'], return_pvalue=True)
+   print(f"距离相关系数: {result['dcor']:.4f}")
+   print(f"p值: {result['p_value']:.4f}")
 
 互信息
 ------
@@ -366,8 +463,8 @@ CSV 导出
 
    from pycorrana import mutual_info_score
 
-   mi = mutual_info_score(df['x'], df['y'])
-   print(f"互信息: {mi:.4f}")
+   result = mutual_info_score(df['x'], df['y'])
+   print(f"互信息: {result['mi_normalized']:.4f}")
 
 最大信息系数
 ------------
@@ -376,8 +473,8 @@ CSV 导出
 
    from pycorrana import maximal_information_coefficient
 
-   mic = maximal_information_coefficient(df['x'], df['y'])
-   print(f"MIC: {mic:.4f}")
+   result = maximal_information_coefficient(df['x'], df['y'])
+   print(f"MIC: {result['mic']:.4f}")
 
 非线性依赖报告
 --------------
@@ -413,8 +510,7 @@ CSV 导出
    df = make_correlated_data(
        n_samples=1000,
        n_features=10,
-       correlation_strength=0.7,
-       noise_level=0.1
+       correlation=0.7
    )
 
 查看可用数据集

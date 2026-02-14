@@ -10,11 +10,12 @@ PyCorrAna 是一个完整的 Python 相关性分析工具包，实现了用户�
 
 | 功能 | 实现位置 | 说明 |
 |------|---------|------|
-| 读取常见格式 | `utils/data_utils.py:load_data()` | 支持 CSV/Excel/parquet/json/pandas/polars |
+| 读取常见格式 | `utils/data_utils.py:load_data()` | 支持 CSV/Excel/pandas/polars |
 | 缺失值处理 | `utils/data_utils.py:handle_missing()` | dropna + 填充（均值/中位数/众数/KNN） |
 | 缺失比例预警 | `utils/data_utils.py:handle_missing()` | 自动输出缺失值报告 |
 | 自动类型推断 | `utils/data_utils.py:infer_types()` | 数值/二分类/多分类/有序/日期时间 |
 | 异常值可视化 | `utils/data_utils.py:detect_outliers()` | IQR/Z-Score 方法 + 箱线图 |
+| 大数据检测 | `utils/data_utils.py:is_large_data()` | 自动检测大数据集 |
 
 ### 二、相关性计算引擎 ✅
 
@@ -59,15 +60,37 @@ PyCorrAna 是一个完整的 Python 相关性分析工具包，实现了用户�
 | 日志提示 | `CorrAnalyzer.__init__()` | 自动告知使用的方法 |
 | 示例数据集 | `datasets.py` | iris/titanic/wine/生成数据 |
 
-### 六、其他功能 ✅
+### 六、偏相关分析 ✅
 
 | 功能 | 实现位置 | 说明 |
 |------|---------|------|
-| 偏相关分析 | `core/partial_corr.py` | 控制协变量后的净相关 |
+| 偏相关分析 | `core/partial_corr.py:partial_corr()` | 控制协变量后的净相关 |
 | 偏相关矩阵 | `core/partial_corr.py:partial_corr_matrix()` | 批量计算 |
+| 半偏相关 | `core/partial_corr.py:semipartial_corr()` | 部分相关 |
+| 分析器类 | `core/partial_corr.py:PartialCorrAnalyzer` | 完整分析流程 |
+
+### 七、非线性依赖检测 ✅
+
+| 功能 | 实现位置 | 说明 |
+|------|---------|------|
 | 距离相关 | `core/nonlinear.py:distance_correlation()` | 检测任意依赖 |
 | 互信息 | `core/nonlinear.py:mutual_info_score()` | 非线性关联 |
 | MIC | `core/nonlinear.py:maximal_information_coefficient()` | 最大信息系数 |
+| 分析器类 | `core/nonlinear.py:NonlinearAnalyzer` | 完整分析流程 |
+
+### 八、大数据优化 ✅
+
+| 功能 | 实现位置 | 说明 |
+|------|---------|------|
+| 智能采样 | `utils/large_data.py:smart_sample()` | 随机/分层采样 |
+| 分块计算 | `utils/large_data.py:chunked_correlation()` | 大矩阵分块处理 |
+| 内存优化 | `utils/large_data.py:optimize_dataframe()` | 减少内存占用 |
+| 配置类 | `utils/large_data.py:LargeDataConfig` | 灵活配置参数 |
+
+### 九、CLI 工具 ✅
+
+| 功能 | 实现位置 | 说明 |
+|------|---------|------|
 | 分模块 CLI | `cli/main_cli.py` | analyze/clean/partial/nonlinear/info |
 | 交互式 CLI | `cli/interactive.py` | 问答式完整流程 |
 
@@ -75,7 +98,7 @@ PyCorrAna 是一个完整的 Python 相关性分析工具包，实现了用户�
 
 ```
 pycorrana/
-├── pycorrana/
+├── src/pycorrana/
 │   ├── __init__.py              # 包入口
 │   ├── datasets.py              # 示例数据集
 │   ├── core/                    # 核心分析模块
@@ -86,16 +109,16 @@ pycorrana/
 │   │   └── nonlinear.py         # 非线性检测
 │   ├── utils/                   # 工具函数
 │   │   ├── data_utils.py        # 数据处理
-│   │   └── stats_utils.py       # 统计工具
+│   │   ├── stats_utils.py       # 统计工具
+│   │   └── large_data.py        # 大数据优化
 │   └── cli/                     # 命令行工具
 │       ├── main_cli.py          # 分模块CLI
 │       └── interactive.py       # 交互式CLI
 ├── tests/                       # 测试
 ├── examples/                    # 示例代码
+├── docs/                        # 文档
 ├── demo.py                      # 演示脚本
-├── setup.py                     # 安装配置
-├── pyproject.toml               # 现代Python项目配置
-├── requirements.txt             # 依赖
+├── pyproject.toml               # 项目配置
 ├── README.md                    # 项目说明
 ├── ARCHITECTURE.md              # 架构文档
 ├── QUICKSTART.md                # 快速入门
@@ -110,6 +133,7 @@ pycorrana/
 from pycorrana import quick_corr, CorrAnalyzer
 from pycorrana.core.partial_corr import partial_corr
 from pycorrana.core.nonlinear import distance_correlation
+from pycorrana.utils import LargeDataConfig
 
 # 一行代码分析
 result = quick_corr('data.csv', target='sales', export='results.xlsx')
@@ -119,6 +143,10 @@ analyzer = CorrAnalyzer(df)
 analyzer.fit()
 analyzer.plot_heatmap()
 analyzer.export_results('results.xlsx')
+
+# 大数据优化
+config = LargeDataConfig(sample_size=100000, auto_sample=True)
+analyzer = CorrAnalyzer(large_df, large_data_config=config)
 
 # 偏相关
 partial_corr(df, x='income', y='happiness', covars=['age', 'education'])
@@ -153,7 +181,9 @@ pycorrana-interactive
 3. **丰富的可视化**：热力图、散点图矩阵、网络图等
 4. **多种导出格式**：Excel/CSV/HTML/Markdown
 5. **双重CLI**：分模块CLI + 交互式CLI
-6. **完善的文档**：README + 架构文档 + 快速入门 + 示例代码
+6. **大数据优化**：智能采样、分块计算、内存优化
+7. **完善的文档**：README + 架构文档 + 快速入门 + 示例代码
+8. **现代Python**：支持 Python 3.10-3.13
 
 ## 测试验证
 
@@ -165,7 +195,7 @@ python demo.py
 python -m pytest tests/
 
 # CLI 测试
-python -m pycorrana.cli.main_cli analyze test_data.csv --export results.xlsx
+pycorrana analyze test_data.csv --export results.xlsx
 ```
 
 ## 扩展性
@@ -174,6 +204,7 @@ python -m pycorrana.cli.main_cli analyze test_data.csv --export results.xlsx
 - 添加新方法：修改 `_compute_pair()`
 - 添加新可视化：在 `CorrVisualizer` 添加方法
 - 添加新导出格式：在 `CorrReporter` 添加方法
+- 添加新数据优化：在 `large_data.py` 添加函数
 
 ## 总结
 
@@ -188,3 +219,4 @@ PyCorrAna 完整实现了用户的所有需求，提供了：
 - ✅ 非线性依赖检测
 - ✅ 交互式界面
 - ✅ 示例数据集
+- ✅ 大数据优化

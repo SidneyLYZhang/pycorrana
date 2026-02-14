@@ -4,305 +4,279 @@
 提供分模块的CLI工具，支持数据流水线各阶段的操作。
 """
 
-import argparse
-import sys
 from pathlib import Path
+from typing import Optional, List
 
-import pandas as pd
-import numpy as np
+import typer
+from rich.console import Console
+from rich.table import Table
 
-from ..core.analyzer import quick_corr, CorrAnalyzer
+from ..core.analyzer import quick_corr
 from ..core.partial_corr import partial_corr, partial_corr_matrix
-from ..core.nonlinear import distance_correlation, mutual_info_score, nonlinear_dependency_report
+from ..core.nonlinear import nonlinear_dependency_report
 from ..utils.data_utils import load_data, infer_types, handle_missing, detect_outliers
 
+app = typer.Typer(
+    name="pycorrana",
+    help="PyCorrAna - Python Correlation Analysis Toolkit",
+    add_completion=False,
+)
 
-def create_parser():
-    """创建命令行参数解析器"""
-    parser = argparse.ArgumentParser(
-        prog='pycorrana',
-        description='PyCorrAna - Python Correlation Analysis Toolkit',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-示例:
-  # 完整分析
-  pycorrana analyze data.csv --target sales --export results.xlsx
-  
-  # 数据清洗
-  pycorrana clean data.csv --dropna --output cleaned.csv
-  
-  # 偏相关分析
-  pycorrana partial data.csv -x income -y happiness -c age,education
-  
-  # 非线性检测
-  pycorrana nonlinear data.csv --top 20
-        """
-    )
-    
-    subparsers = parser.add_subparsers(dest='command', help='可用命令')
-    
-    # ========== analyze 命令 ==========
-    analyze_parser = subparsers.add_parser(
-        'analyze',
-        help='执行完整的相关性分析'
-    )
-    analyze_parser.add_argument('input', help='输入文件路径 (CSV/Excel)')
-    analyze_parser.add_argument('--target', '-t', help='目标变量')
-    analyze_parser.add_argument('--columns', '-c', help='要分析的列，逗号分隔')
-    analyze_parser.add_argument('--method', '-m', default='auto',
-                               choices=['auto', 'pearson', 'spearman', 'kendall'],
-                               help='相关性方法 (默认: auto)')
-    analyze_parser.add_argument('--missing', default='warn',
-                               choices=['warn', 'drop', 'fill'],
-                               help='缺失值处理策略 (默认: warn)')
-    analyze_parser.add_argument('--fill-method', default='median',
-                               choices=['mean', 'median', 'mode', 'knn'],
-                               help='填充方法 (默认: median)')
-    analyze_parser.add_argument('--pvalue-correction', default='fdr_bh',
-                               choices=['bonferroni', 'fdr_bh', 'fdr_by', 'holm'],
-                               help='p值校正方法 (默认: fdr_bh)')
-    analyze_parser.add_argument('--no-plot', action='store_true',
-                               help='不生成图表')
-    analyze_parser.add_argument('--export', '-e', help='导出结果路径')
-    analyze_parser.add_argument('--verbose', '-v', action='store_true',
-                               help='输出详细信息')
-    
-    # ========== clean 命令 ==========
-    clean_parser = subparsers.add_parser(
-        'clean',
-        help='数据清洗和预处理'
-    )
-    clean_parser.add_argument('input', help='输入文件路径')
-    clean_parser.add_argument('--output', '-o', required=True, help='输出文件路径')
-    clean_parser.add_argument('--dropna', action='store_true', help='删除缺失值')
-    clean_parser.add_argument('--fill', choices=['mean', 'median', 'mode', 'knn'],
-                             help='填充缺失值')
-    clean_parser.add_argument('--detect-outliers', action='store_true',
-                             help='检测异常值')
-    clean_parser.add_argument('--outlier-method', default='iqr',
-                             choices=['iqr', 'zscore'],
-                             help='异常值检测方法')
-    
-    # ========== partial 命令 ==========
-    partial_parser = subparsers.add_parser(
-        'partial',
-        help='偏相关分析'
-    )
-    partial_parser.add_argument('input', help='输入文件路径')
-    partial_parser.add_argument('-x', required=True, help='第一个变量')
-    partial_parser.add_argument('-y', required=True, help='第二个变量')
-    partial_parser.add_argument('-c', '--covars', required=True,
-                               help='协变量，逗号分隔')
-    partial_parser.add_argument('--method', default='pearson',
-                               choices=['pearson', 'spearman'],
-                               help='相关方法')
-    partial_parser.add_argument('--matrix', action='store_true',
-                               help='计算偏相关矩阵')
-    
-    # ========== nonlinear 命令 ==========
-    nonlinear_parser = subparsers.add_parser(
-        'nonlinear',
-        help='非线性依赖检测'
-    )
-    nonlinear_parser.add_argument('input', help='输入文件路径')
-    nonlinear_parser.add_argument('--columns', '-c', help='要分析的列，逗号分隔')
-    nonlinear_parser.add_argument('--methods', default='dcor,mi',
-                                 help='检测方法，逗号分隔 (dcor, mi, mic)')
-    nonlinear_parser.add_argument('--top', type=int, default=10,
-                                 help='显示前N个结果')
-    nonlinear_parser.add_argument('--export', '-e', help='导出结果路径')
-    
-    # ========== info 命令 ==========
-    info_parser = subparsers.add_parser(
-        'info',
-        help='查看数据信息'
-    )
-    info_parser.add_argument('input', help='输入文件路径')
-    info_parser.add_argument('--types', action='store_true',
-                            help='显示类型推断结果')
-    info_parser.add_argument('--missing', action='store_true',
-                            help='显示缺失值信息')
-    
-    return parser
+console = Console()
 
 
-def cmd_analyze(args):
-    """执行analyze命令"""
-    print(f"正在分析: {args.input}")
+def parse_columns(columns: Optional[str]) -> Optional[List[str]]:
+    if not columns:
+        return None
+    return [c.strip() for c in columns.split(',')]
+
+
+@app.command()
+def analyze(
+    input: Path = typer.Argument(..., help="输入文件路径 (CSV/Excel)", exists=True),
+    target: Optional[str] = typer.Option(None, "--target", "-t", help="目标变量"),
+    columns: Optional[str] = typer.Option(None, "--columns", "-c", help="要分析的列，逗号分隔"),
+    method: str = typer.Option("auto", "--method", "-m", help="相关性方法",
+                               case_sensitive=False),
+    missing: str = typer.Option("warn", "--missing", help="缺失值处理策略"),
+    fill_method: str = typer.Option("median", "--fill-method", help="填充方法"),
+    pvalue_correction: str = typer.Option("fdr_bh", "--pvalue-correction", help="p值校正方法"),
+    no_plot: bool = typer.Option(False, "--no-plot", help="不生成图表"),
+    export: Optional[str] = typer.Option(None, "--export", "-e", help="导出结果路径"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="输出详细信息"),
+):
+    """
+    执行完整的相关性分析
+
+    示例:
+
+        pycorrana analyze data.csv --target sales --export results.xlsx
+    """
+    console.print(f"[cyan]正在分析:[/cyan] {input}")
     
-    columns = args.columns.split(',') if args.columns else None
+    cols = parse_columns(columns)
     
     result = quick_corr(
-        data=args.input,
-        target=args.target,
-        columns=columns,
-        method=args.method,
-        missing_strategy=args.missing,
-        fill_method=args.fill_method if args.missing == 'fill' else None,
-        pvalue_correction=args.pvalue_correction,
-        plot=not args.no_plot,
-        export=args.export if args.export else False,
-        verbose=args.verbose
+        data=str(input),
+        target=target,
+        columns=cols,
+        method=method,
+        missing_strategy=missing,
+        fill_method=fill_method if missing == 'fill' else None,
+        pvalue_correction=pvalue_correction,
+        plot=not no_plot,
+        export=export if export else False,
+        verbose=verbose
     )
     
-    return 0
+    raise typer.Exit(0)
 
 
-def cmd_clean(args):
-    """执行clean命令"""
-    print(f"正在清洗: {args.input}")
+@app.command()
+def clean(
+    input: Path = typer.Argument(..., help="输入文件路径", exists=True),
+    output: str = typer.Option(..., "--output", "-o", help="输出文件路径"),
+    dropna: bool = typer.Option(False, "--dropna", help="删除缺失值"),
+    fill: Optional[str] = typer.Option(None, "--fill", help="填充缺失值 (mean/median/mode/knn)"),
+    detect_outliers_flag: bool = typer.Option(False, "--detect-outliers", help="检测异常值"),
+    outlier_method: str = typer.Option("iqr", "--outlier-method", help="异常值检测方法"),
+):
+    """
+    数据清洗和预处理
+
+    示例:
+
+        pycorrana clean data.csv --dropna --output cleaned.csv
+    """
+    console.print(f"[cyan]正在清洗:[/cyan] {input}")
     
-    # 加载数据
-    df = load_data(args.input)
-    print(f"原始数据: {len(df)} 行, {len(df.columns)} 列")
+    df = load_data(str(input))
+    console.print(f"原始数据: {len(df)} 行, {len(df.columns)} 列")
     
-    # 缺失值处理
-    if args.dropna:
+    if dropna:
         df = df.dropna()
-        print(f"删除缺失值后: {len(df)} 行")
-    elif args.fill:
-        df = handle_missing(df, strategy='fill', fill_method=args.fill, verbose=True)
+        console.print(f"删除缺失值后: {len(df)} 行")
+    elif fill:
+        df = handle_missing(df, strategy='fill', fill_method=fill, verbose=True)
     
-    # 异常值检测
-    if args.detect_outliers:
-        outliers = detect_outliers(df, method=args.outlier_method)
+    if detect_outliers_flag:
+        outliers = detect_outliers(df, method=outlier_method)
         total_outliers = sum(mask.sum() for mask in outliers.values())
-        print(f"检测到 {total_outliers} 个异常值")
+        console.print(f"检测到 [yellow]{total_outliers}[/yellow] 个异常值")
     
-    # 保存
-    if args.output.endswith('.csv'):
-        df.to_csv(args.output, index=False)
-    elif args.output.endswith('.xlsx'):
-        df.to_excel(args.output, index=False)
+    if output.endswith('.csv'):
+        df.to_csv(output, index=False)
+    elif output.endswith('.xlsx'):
+        df.to_excel(output, index=False)
     else:
-        df.to_csv(args.output, index=False)
+        df.to_csv(output, index=False)
     
-    print(f"已保存到: {args.output}")
-    return 0
+    console.print(f"[green]已保存到:[/green] {output}")
+    raise typer.Exit(0)
 
 
-def cmd_partial(args):
-    """执行partial命令"""
-    print(f"正在执行偏相关分析: {args.input}")
+@app.command()
+def partial(
+    input: Path = typer.Argument(..., help="输入文件路径", exists=True),
+    x: str = typer.Option(..., "-x", help="第一个变量"),
+    y: str = typer.Option(..., "-y", help="第二个变量"),
+    covars: str = typer.Option(..., "-c", "--covars", help="协变量，逗号分隔"),
+    method: str = typer.Option("pearson", "--method", help="相关方法"),
+    matrix: bool = typer.Option(False, "--matrix", help="计算偏相关矩阵"),
+):
+    """
+    偏相关分析
+
+    示例:
+
+        pycorrana partial data.csv -x income -y happiness -c age,education
+    """
+    console.print(f"[cyan]正在执行偏相关分析:[/cyan] {input}")
     
-    df = load_data(args.input)
-    covars = args.covars.split(',')
+    df = load_data(str(input))
+    covar_list = [c.strip() for c in covars.split(',')]
     
-    if args.matrix:
-        # 计算偏相关矩阵
-        matrix = partial_corr_matrix(df, covars=covars, method=args.method)
-        print("\n偏相关矩阵:")
-        print(matrix.round(4))
+    if matrix:
+        result_matrix = partial_corr_matrix(df, covars=covar_list, method=method)
+        console.print("\n[bold]偏相关矩阵:[/bold]")
+        console.print(result_matrix.round(4))
     else:
-        # 计算单个偏相关
-        result = partial_corr(df, args.x, args.y, covars, method=args.method)
+        result = partial_corr(df, x, y, covar_list, method=method)
         
-        print(f"\n偏相关分析结果:")
-        print(f"  变量: {result['x']} vs {result['y']}")
-        print(f"  控制变量: {result['covariates']}")
-        print(f"  偏相关系数: {result['partial_correlation']:.4f}")
-        print(f"  p值: {result['p_value']:.4e}")
-        print(f"  95% CI: [{result['ci_95'][0]:.4f}, {result['ci_95'][1]:.4f}]")
-        print(f"  样本量: {result['n']}")
+        console.print(f"\n[bold]偏相关分析结果:[/bold]")
+        console.print(f"  变量: {result['x']} vs {result['y']}")
+        console.print(f"  控制变量: {result['covariates']}")
+        console.print(f"  偏相关系数: [cyan]{result['partial_correlation']:.4f}[/cyan]")
+        console.print(f"  p值: {result['p_value']:.4e}")
+        console.print(f"  95% CI: [{result['ci_95'][0]:.4f}, {result['ci_95'][1]:.4f}]")
+        console.print(f"  样本量: {result['n']}")
     
-    return 0
+    raise typer.Exit(0)
 
 
-def cmd_nonlinear(args):
-    """执行nonlinear命令"""
-    print(f"正在执行非线性依赖检测: {args.input}")
+@app.command()
+def nonlinear(
+    input: Path = typer.Argument(..., help="输入文件路径", exists=True),
+    columns: Optional[str] = typer.Option(None, "--columns", "-c", help="要分析的列，逗号分隔"),
+    methods: str = typer.Option("dcor,mi", "--methods", help="检测方法，逗号分隔 (dcor, mi, mic)"),
+    top: int = typer.Option(10, "--top", help="显示前N个结果"),
+    export: Optional[str] = typer.Option(None, "--export", "-e", help="导出结果路径"),
+):
+    """
+    非线性依赖检测
+
+    示例:
+
+        pycorrana nonlinear data.csv --top 20
+    """
+    console.print(f"[cyan]正在执行非线性依赖检测:[/cyan] {input}")
     
-    df = load_data(args.input)
+    df = load_data(str(input))
     
-    columns = args.columns.split(',') if args.columns else None
-    methods = args.methods.split(',')
+    cols = parse_columns(columns)
+    method_list = [m.strip() for m in methods.split(',')]
     
     report = nonlinear_dependency_report(
-        df, columns=columns, methods=methods, top_n=args.top
+        df, columns=cols, methods=method_list, top_n=top
     )
     
-    print(f"\n非线性依赖检测报告 (Top {args.top}):")
-    print(report.to_string(index=False))
+    console.print(f"\n[bold]非线性依赖检测报告 (Top {top}):[/bold]")
     
-    if args.export:
-        report.to_csv(args.export, index=False)
-        print(f"\n已导出到: {args.export}")
+    table = Table(show_header=True, header_style="bold magenta")
+    for col in report.columns:
+        table.add_column(col, style="cyan")
     
-    return 0
+    for _, row in report.iterrows():
+        table.add_row(*[str(v) for v in row.values])
+    
+    console.print(table)
+    
+    if export:
+        report.to_csv(export, index=False)
+        console.print(f"\n[green]已导出到:[/green] {export}")
+    
+    raise typer.Exit(0)
 
 
-def cmd_info(args):
-    """执行info命令"""
-    df = load_data(args.input)
+@app.command()
+def info(
+    input: Path = typer.Argument(..., help="输入文件路径", exists=True),
+    types: bool = typer.Option(False, "--types", help="显示类型推断结果"),
+    missing: bool = typer.Option(False, "--missing", help="显示缺失值信息"),
+):
+    """
+    查看数据信息
+
+    示例:
+
+        pycorrana info data.csv --types --missing
+    """
+    df = load_data(str(input))
     
-    print(f"\n数据概览: {args.input}")
-    print(f"=" * 50)
-    print(f"行数: {len(df)}")
-    print(f"列数: {len(df.columns)}")
-    print(f"\n列信息:")
-    print("-" * 50)
+    console.print(f"\n[bold]数据概览:[/bold] {input}")
+    console.print("=" * 50)
+    console.print(f"行数: {len(df)}")
+    console.print(f"列数: {len(df.columns)}")
+    console.print(f"\n[bold]列信息:[/bold]")
+    console.print("-" * 50)
     
-    info_df = pd.DataFrame({
-        '列名': df.columns,
-        '类型': df.dtypes.values,
-        '非空值': df.count().values,
-        '缺失值': df.isnull().sum().values,
-        '缺失比例': (df.isnull().sum() / len(df)).values,
-        '唯一值': df.nunique().values
-    })
+    table = Table(show_header=True, header_style="bold magenta")
+    table.add_column("列名", style="cyan")
+    table.add_column("类型", style="green")
+    table.add_column("非空值", style="yellow")
+    table.add_column("缺失值", style="red")
+    table.add_column("缺失比例", style="magenta")
+    table.add_column("唯一值", style="blue")
     
-    print(info_df.to_string(index=False))
+    for col in df.columns:
+        missing_count = df[col].isnull().sum()
+        missing_ratio = missing_count / len(df)
+        table.add_row(
+            col,
+            str(df[col].dtype),
+            str(df[col].count()),
+            str(missing_count),
+            f"{missing_ratio:.2%}",
+            str(df[col].nunique())
+        )
     
-    if args.types:
-        print("\n类型推断结果:")
-        print("-" * 50)
+    console.print(table)
+    
+    if types:
+        console.print("\n[bold]类型推断结果:[/bold]")
+        console.print("-" * 50)
         type_mapping = infer_types(df)
+        type_table = Table(show_header=True, header_style="bold magenta")
+        type_table.add_column("列名", style="cyan")
+        type_table.add_column("推断类型", style="green")
         for col, t in type_mapping.items():
-            print(f"  {col}: {t}")
+            type_table.add_row(col, t)
+        console.print(type_table)
     
-    if args.missing:
-        print("\n缺失值详情:")
-        print("-" * 50)
-        missing = df.isnull().sum()
-        missing = missing[missing > 0].sort_values(ascending=False)
-        if len(missing) > 0:
-            for col, count in missing.items():
+    if missing:
+        console.print("\n[bold]缺失值详情:[/bold]")
+        console.print("-" * 50)
+        missing_series = df.isnull().sum()
+        missing_series = missing_series[missing_series > 0].sort_values(ascending=False)
+        if len(missing_series) > 0:
+            missing_table = Table(show_header=True, header_style="bold magenta")
+            missing_table.add_column("列名", style="cyan")
+            missing_table.add_column("缺失数量", style="yellow")
+            missing_table.add_column("缺失比例", style="red")
+            for col, count in missing_series.items():
                 ratio = count / len(df)
-                print(f"  {col}: {count} ({ratio:.2%})")
+                missing_table.add_row(col, str(count), f"{ratio:.2%}")
+            console.print(missing_table)
         else:
-            print("  无缺失值")
+            console.print("[green]无缺失值[/green]")
     
-    return 0
+    raise typer.Exit(0)
 
 
 def main():
-    """主入口函数"""
-    parser = create_parser()
-    args = parser.parse_args()
-    
-    if not args.command:
-        parser.print_help()
-        return 1
-    
-    # 执行对应命令
-    commands = {
-        'analyze': cmd_analyze,
-        'clean': cmd_clean,
-        'partial': cmd_partial,
-        'nonlinear': cmd_nonlinear,
-        'info': cmd_info,
-    }
-    
-    if args.command in commands:
-        try:
-            return commands[args.command](args)
-        except Exception as e:
-            print(f"错误: {e}", file=sys.stderr)
-            return 1
-    else:
-        parser.print_help()
-        return 1
+    """主入口函数 - 保持向后兼容"""
+    app()
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    main()

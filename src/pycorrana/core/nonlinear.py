@@ -5,13 +5,18 @@
 """
 
 import warnings
-from typing import Optional, List
+from typing import Optional, List, TYPE_CHECKING
 import numpy as np
 import pandas as pd
 from scipy.spatial.distance import pdist, squareform
 from scipy.stats import entropy
-from scipy.special import digamma
-from sklearn.feature_selection import mutual_info_regression, mutual_info_classif
+from sklearn.feature_selection import mutual_info_regression
+
+if TYPE_CHECKING:
+    from ..utils.large_data import LargeDataConfig
+
+
+SAMPLE_SIZE_NONLINEAR = 20_000
 
 
 def distance_correlation(x: np.ndarray, 
@@ -350,7 +355,10 @@ def maximal_information_coefficient(x: np.ndarray,
 def nonlinear_dependency_report(data: pd.DataFrame,
                                columns: Optional[List[str]] = None,
                                methods: List[str] = ['dcor', 'mi', 'mic'],
-                               top_n: int = 10) -> pd.DataFrame:
+                               top_n: int = 10,
+                               sample_size: int = SAMPLE_SIZE_NONLINEAR,
+                               random_state: int = 42,
+                               verbose: bool = True) -> pd.DataFrame:
     """
     生成非线性依赖检测报告。
     
@@ -364,6 +372,12 @@ def nonlinear_dependency_report(data: pd.DataFrame,
         要使用的检测方法
     top_n : int, default=10
         显示前N个结果
+    sample_size : int, default=20000
+        大数据集采样大小，设为None或0禁用采样
+    random_state : int, default=42
+        随机种子
+    verbose : bool, default=True
+        是否输出信息
         
     Returns
     -------
@@ -373,10 +387,16 @@ def nonlinear_dependency_report(data: pd.DataFrame,
     if columns is None:
         columns = data.select_dtypes(include=[np.number]).columns.tolist()
     
+    n_rows = len(data)
+    if sample_size and sample_size > 0 and n_rows > sample_size:
+        data = data.sample(n=sample_size, random_state=random_state)
+        if verbose:
+            print(f"大数据集检测: 采样 {n_rows} -> {sample_size} 行")
+    
     results = []
     
     for i, col1 in enumerate(columns):
-        for col2 in enumerate(columns[i+1:], i+1):
+        for col2 in columns[i+1:]:
             x = data[col1].values
             y = data[col2].values
             
@@ -398,7 +418,6 @@ def nonlinear_dependency_report(data: pd.DataFrame,
     
     df = pd.DataFrame(results)
     
-    # 计算综合得分（各方法平均）
     score_cols = [c for c in df.columns if c not in ['var1', 'var2']]
     if score_cols:
         df['avg_score'] = df[score_cols].mean(axis=1)
@@ -413,6 +432,15 @@ class NonlinearAnalyzer:
     
     提供非线性依赖检测的完整流程。
     
+    Parameters
+    ----------
+    data : pd.DataFrame
+        输入数据
+    verbose : bool, default=True
+        是否输出详细信息
+    sample_size : int, default=20000
+        大数据集采样大小，设为None或0禁用采样
+        
     Examples
     --------
     >>> analyzer = NonlinearAnalyzer(df)
@@ -420,7 +448,10 @@ class NonlinearAnalyzer:
     >>> report = analyzer.generate_report()
     """
     
-    def __init__(self, data: pd.DataFrame, verbose: bool = True):
+    def __init__(self, 
+                 data: pd.DataFrame, 
+                 verbose: bool = True,
+                 sample_size: int = SAMPLE_SIZE_NONLINEAR):
         """
         Parameters
         ----------
@@ -428,9 +459,23 @@ class NonlinearAnalyzer:
             输入数据
         verbose : bool, default=True
             是否输出详细信息
+        sample_size : int, default=20000
+            大数据集采样大小
         """
-        self.data = data.copy()
+        self.original_data = data.copy()
         self.verbose = verbose
+        self.sample_size = sample_size
+        self._sampled = False
+        
+        n_rows = len(data)
+        if sample_size and sample_size > 0 and n_rows > sample_size:
+            self.data = data.sample(n=sample_size, random_state=42)
+            self._sampled = True
+            if verbose:
+                print(f"大数据集检测: 采样 {n_rows} -> {sample_size} 行")
+        else:
+            self.data = data.copy()
+        
         self.results = []
     
     def analyze_pair(self,
@@ -498,7 +543,8 @@ class NonlinearAnalyzer:
             检测报告
         """
         report = nonlinear_dependency_report(
-            self.data, columns=columns, top_n=top_n
+            self.data, columns=columns, top_n=top_n,
+            sample_size=0, verbose=False
         )
         
         if self.verbose:

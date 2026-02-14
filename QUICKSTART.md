@@ -3,12 +3,19 @@
 ## 安装
 
 ```bash
+# 从 PyPI 安装
+pip install pycorrana
+
 # 从源码安装
+git clone https://github.com/sidneylyzhang/pycorrana.git
 cd pycorrana
 pip install -e .
 
-# 或安装依赖后直接使用
-pip install numpy pandas scipy matplotlib seaborn statsmodels scikit-learn openpyxl
+# 安装开发依赖
+pip install -e ".[dev]"
+
+# 安装文档依赖
+pip install -e ".[docs]"
 ```
 
 ## 5分钟快速上手
@@ -44,20 +51,23 @@ result = quick_corr(df, target='sales', plot=True, export='results.xlsx')
 
 ```bash
 # 启动交互式分析
-python -m pycorrana.cli.interactive
+pycorrana-interactive
 ```
 
 ### 4. 使用命令行工具
 
 ```bash
 # 完整分析
-python -m pycorrana.cli.main_cli analyze data.csv --target sales --export results.xlsx
+pycorrana analyze data.csv --target sales --export results.xlsx
 
 # 数据信息
-python -m pycorrana.cli.main_cli info data.csv
+pycorrana info data.csv
 
 # 偏相关分析
-python -m pycorrana.cli.main_cli partial data.csv -x income -y happiness -c age
+pycorrana partial data.csv -x income -y happiness -c age
+
+# 非线性检测
+pycorrana nonlinear data.csv --top 20
 ```
 
 ## 核心功能速查
@@ -70,13 +80,18 @@ python -m pycorrana.cli.main_cli partial data.csv -x income -y happiness -c age
 | 缺失值处理 | `quick_corr(df, missing_strategy='drop')` |
 | 导出结果 | `quick_corr(df, export='results.xlsx')` |
 | 偏相关 | `partial_corr(df, x='A', y='B', covars='Z')` |
+| 半偏相关 | `semipartial_corr(df, x='A', y='B', covars='Z')` |
 | 距离相关 | `distance_correlation(df['A'], df['B'])` |
 | 互信息 | `mutual_info_score(df['A'], df['B'])` |
+| 大数据优化 | `CorrAnalyzer(df, large_data_config=config)` |
 
 ## 示例数据集
 
 ```python
-from pycorrana.datasets import load_iris, load_titanic, make_correlated_data
+from pycorrana.datasets import load_iris, load_titanic, load_wine, make_correlated_data, list_datasets
+
+# 查看可用数据集
+print(list_datasets())
 
 # 鸢尾花数据集
 df = load_iris()
@@ -84,8 +99,94 @@ df = load_iris()
 # 泰坦尼克号数据集
 df = load_titanic()
 
+# 葡萄酒数据集
+df = load_wine()
+
 # 生成相关数据
 df = make_correlated_data(n_samples=500, correlation=0.7)
+```
+
+## 大数据优化
+
+```python
+from pycorrana import CorrAnalyzer
+from pycorrana.utils import LargeDataConfig
+
+# 配置大数据优化
+config = LargeDataConfig(
+    sample_size=100000,      # 采样大小
+    auto_sample=True,        # 自动采样
+    auto_optimize=True,      # 自动优化内存
+    verbose=True
+)
+
+# 使用配置分析大数据集
+analyzer = CorrAnalyzer(large_df, large_data_config=config)
+analyzer.fit()
+```
+
+## 偏相关分析
+
+```python
+from pycorrana import partial_corr, partial_corr_matrix, semipartial_corr
+
+# 偏相关：控制协变量后的净相关
+result = partial_corr(
+    df,
+    x='income',
+    y='happiness',
+    covars=['age', 'education']
+)
+print(f"偏相关系数: {result['partial_correlation']:.3f}")
+
+# 半偏相关（部分相关）
+result = semipartial_corr(df, x='income', y='happiness', covars='age')
+
+# 偏相关矩阵
+pcorr_matrix = partial_corr_matrix(df, covars='age')
+```
+
+## 非线性检测
+
+```python
+from pycorrana import distance_correlation, mutual_info_score
+from pycorrana.core.nonlinear import nonlinear_dependency_report
+
+# 距离相关（检测非线性关系）
+result = distance_correlation(df['X'], df['Y'], return_pvalue=True)
+print(f"dCor: {result['dcor']:.3f}, p-value: {result['p_value']:.4f}")
+
+# 互信息
+result = mutual_info_score(df['X'], df['Y'])
+print(f"MI: {result['mi_normalized']:.3f}")
+
+# 非线性依赖报告
+report = nonlinear_dependency_report(df, top_n=10)
+print(report)
+```
+
+## 数据清洗
+
+```python
+from pycorrana.utils.data_utils import load_data, handle_missing, detect_outliers
+
+# 加载数据（自动识别格式）
+df = load_data('data.csv')
+
+# 缺失值处理
+df_clean = handle_missing(
+    df,
+    strategy='fill',      # 'drop', 'fill', 'warn'
+    fill_method='knn',    # 'mean', 'median', 'mode', 'knn'
+    verbose=True
+)
+
+# 异常值检测
+outliers = detect_outliers(
+    df,
+    method='iqr',         # 'iqr', 'zscore'
+    visualize=True
+)
 ```
 
 ## 运行演示
@@ -97,3 +198,8 @@ python demo.py
 ## 更多示例
 
 查看 `examples/basic_usage.py` 获取完整示例代码。
+
+## Python 版本要求
+
+- Python >= 3.10
+- 支持 Python 3.10, 3.11, 3.12, 3.13

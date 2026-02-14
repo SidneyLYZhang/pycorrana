@@ -4,22 +4,29 @@
 提供自动化的相关性分析功能，包括自动方法选择、批量计算、可视化等。
 """
 
-import warnings
-from typing import Union, Dict, List, Optional, Tuple
+
+from typing import Union, Dict, List, Optional, Tuple, TYPE_CHECKING
 import numpy as np
 import pandas as pd
 from scipy import stats
 
 from ..utils.data_utils import (
     load_data, infer_types, handle_missing, 
-    detect_outliers, get_column_pairs
+    detect_outliers, get_column_pairs,
+    is_large_data, estimate_memory_usage
 )
 from ..utils.stats_utils import (
     check_normality, correct_pvalues, cramers_v,
     eta_coefficient, point_biserial, interpret_correlation
 )
+from ..utils.large_data import (
+    LargeDataConfig, smart_sample, chunked_correlation, optimize_dataframe
+)
 from .visualizer import CorrVisualizer
 from .reporter import CorrReporter
+
+if TYPE_CHECKING:
+    import polars as pl
 
 
 class CorrAnalyzer:
@@ -43,12 +50,19 @@ class CorrAnalyzer:
         p值校正方法
     verbose : bool, default=True
         是否输出详细信息
+    large_data_config : LargeDataConfig, optional
+        大数据处理配置，用于优化大数据集的计算效率
         
     Examples
     --------
     >>> analyzer = CorrAnalyzer(df)
     >>> result = analyzer.fit()
     >>> analyzer.plot_heatmap()
+    
+    >>> # 大数据集优化
+    >>> from pycorrana.utils import LargeDataConfig
+    >>> config = LargeDataConfig(sample_size=100000, auto_sample=True)
+    >>> analyzer = CorrAnalyzer(large_df, large_data_config=config)
     """
     
     def __init__(self, 
@@ -57,7 +71,8 @@ class CorrAnalyzer:
                  missing_strategy: str = 'warn',
                  fill_method: Optional[str] = None,
                  pvalue_correction: str = 'fdr_bh',
-                 verbose: bool = True):
+                 verbose: bool = True,
+                 large_data_config: Optional[LargeDataConfig] = None):
         
         self.original_data = data.copy()
         self.data = data.copy()
@@ -66,6 +81,10 @@ class CorrAnalyzer:
         self.fill_method = fill_method
         self.pvalue_correction = pvalue_correction
         self.verbose = verbose
+        
+        self.large_data_config = large_data_config
+        self._is_large_data = False
+        self._sampled = False
         
         self.type_mapping = {}
         self.corr_matrix = None
@@ -80,10 +99,19 @@ class CorrAnalyzer:
             print("=" * 60)
             print("PyCorrAna - 相关性分析器")
             print("=" * 60)
+            
+            mem_mb = estimate_memory_usage(self.data)
+            print(f"数据规模: {len(self.data):,} 行, {len(self.data.columns)} 列, {mem_mb:.1f} MB")
+            
+            if is_large_data(self.data):
+                self._is_large_data = True
+                print("⚠️ 检测到大数据集，将使用优化策略")
+                if self.large_data_config is None:
+                    self.large_data_config = LargeDataConfig(verbose=self.verbose)
     
     def preprocess(self) -> 'CorrAnalyzer':
         """
-        数据预处理：类型推断、缺失值处理。
+        数据预处理：类型推断、缺失值处理、大数据优化。
         
         Returns
         -------
@@ -92,18 +120,27 @@ class CorrAnalyzer:
         if self.verbose:
             print("\n[1/4] 数据预处理...")
         
-        # 类型推断
+        if self._is_large_data and self.large_data_config:
+            if self.large_data_config.auto_optimize:
+                self.data = optimize_dataframe(self.data, verbose=self.verbose)
+            
+            if self.large_data_config.auto_sample:
+                self.data, self._sampled = self.large_data_config.prepare_data(self.data)
+                if self._sampled:
+                    self.original_data = self.data.copy()
+        
         self.type_mapping = infer_types(self.data)
         
         if self.verbose:
             print(f"  检测到 {len(self.data)} 行, {len(self.data.columns)} 列")
+            if self._sampled:
+                print(f"  (已采样，原始数据: {len(self.original_data):,} 行)")
             type_counts = {}
             for t in self.type_mapping.values():
                 type_counts[t] = type_counts.get(t, 0) + 1
             for t, count in type_counts.items():
                 print(f"  - {t}: {count} 列")
         
-        # 缺失值处理
         if self.missing_strategy != 'warn':
             self.data = handle_missing(
                 self.data, 
@@ -112,7 +149,6 @@ class CorrAnalyzer:
                 verbose=self.verbose
             )
         else:
-            # 仅输出警告
             missing_ratio = self.data.isnull().sum() / len(self.data)
             if missing_ratio.any() and self.verbose:
                 print("\n  ⚠️ 缺失值预警:")
@@ -480,6 +516,7 @@ def quick_corr(data: Union[str, pd.DataFrame, "pl.DataFrame"],
                plot: bool = True,
                export: Union[bool, str] = False,
                verbose: bool = True,
+               large_data_config: Optional[LargeDataConfig] = None,
                **kwargs) -> Dict:
     """
     快速相关性分析入口函数。
@@ -508,6 +545,8 @@ def quick_corr(data: Union[str, pd.DataFrame, "pl.DataFrame"],
         是否导出结果，可以是文件路径
     verbose : bool, default=True
         是否输出详细信息
+    large_data_config : LargeDataConfig, optional
+        大数据处理配置，用于优化大数据集的计算效率
     **kwargs
         其他参数
         
@@ -526,33 +565,33 @@ def quick_corr(data: Union[str, pd.DataFrame, "pl.DataFrame"],
     
     >>> # 自定义参数
     >>> result = quick_corr(df, method='spearman', plot=False, export='results.xlsx')
+    
+    >>> # 大数据集优化
+    >>> from pycorrana.utils import LargeDataConfig
+    >>> config = LargeDataConfig(sample_size=50000, auto_sample=True)
+    >>> result = quick_corr(large_df, large_data_config=config)
     """
-    # 加载数据
     df = load_data(data)
     
-    # 创建分析器
     analyzer = CorrAnalyzer(
         data=df,
         method=method,
         missing_strategy=missing_strategy,
         fill_method=fill_method,
         pvalue_correction=pvalue_correction,
-        verbose=verbose
+        verbose=verbose,
+        large_data_config=large_data_config
     )
     
-    # 执行分析
     result = analyzer.fit(target=target, columns=columns)
     
-    # 自动绘图
     if plot:
         if verbose:
             print("\n[3/4] 生成可视化...")
         
-        # 热力图
         if len(analyzer.corr_matrix) > 1:
             analyzer.plot_heatmap()
         
-        # 散点图矩阵（如果变量不多）
         numeric_cols = [col for col, t in analyzer.type_mapping.items() 
                        if t == 'numeric']
         if len(numeric_cols) >= 2 and len(numeric_cols) <= 6:
@@ -562,7 +601,6 @@ def quick_corr(data: Union[str, pd.DataFrame, "pl.DataFrame"],
                 if verbose:
                     print(f"  散点图矩阵生成失败: {e}")
     
-    # 导出结果
     if export:
         if verbose:
             print("\n[4/4] 导出结果...")
