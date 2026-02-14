@@ -6,6 +6,36 @@
 
 所有重要的变更都将记录在此文件中。
 
+版本 0.1.5 (2026-02-14)
+========================
+
+新增功能
+--------
+
+大数据优化
+~~~~~~~~~~
+
+- 添加 :class:`LargeDataConfig` 大数据配置类
+- 添加 :func:`smart_sample` 智能采样函数（支持随机/分层采样）
+- 添加 :func:`chunked_correlation` 分块计算相关性
+- 添加 :func:`chunked_apply` 分块应用函数
+- 添加 :func:`optimize_dataframe` 内存优化函数
+- 添加 :func:`is_large_data` 大数据检测函数
+- 添加 :func:`estimate_memory_usage` 内存估算函数
+- CorrAnalyzer 支持大数据配置参数
+
+半偏相关分析
+~~~~~~~~~~~~
+
+- 添加 :func:`semipartial_corr` 半偏相关（部分相关）函数
+
+改进
+----
+
+- 优化大数据集的自动检测和提示
+- 改进内存使用效率
+- 更新项目结构为 src 布局
+
 版本 0.1.0 (2026-02-13)
 ========================
 
