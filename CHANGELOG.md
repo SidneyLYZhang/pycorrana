@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# [0.1.6] - 2026-02-27
+
+## 功能
+- **core**: 为相关分析添加置信区间计算与存储
+
+## 文档
+- 补充 MIC 纯 Python 实现及大数据采样使用说明
+
+## 其他更改
+- 🔧 将 GitHub 工作流名称从 “Publish” 改为 “Release”
+- 📝 更新项目文档以反映新增的大数据优化功能
+- 🚀 新增 GitHub Actions 发布工作流
+- 🚀 新增 Python 包发布工作流与烟雾测试
+- ✨ 新增项目文档、配置文件和示例代码
+
 ## [0.1.5] - 2026-02-14
 
 ### Added
