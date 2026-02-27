@@ -43,7 +43,7 @@ PyCorrAna 是一个**方便快速入手**的 Python 相关性分析工具，核�
 | **可视化** | 热力图、散点图矩阵、箱线图、相关网络图 |
 | **结果导出** | Excel/CSV/HTML/Markdown 结果 |
 | **偏相关分析** | 控制协变量后的净相关分析 |
-| **非线性检测** | 距离相关、互信息、MIC |
+| **非线性检测** | 距离相关、互信息、MIC（纯Python实现） |
 | **大数据优化** | 智能采样、分块计算、内存优化 |
 
 ---
@@ -223,7 +223,7 @@ print(pcorr_matrix)
 ### 示例 6: 非线性依赖检测
 
 ```python
-from pycorrana import distance_correlation, mutual_info_score
+from pycorrana import distance_correlation, mutual_info_score, maximal_information_coefficient
 from pycorrana.core.nonlinear import nonlinear_dependency_report
 
 # 距离相关（可检测非线性关系）
@@ -234,10 +234,18 @@ print(f"dCor: {result['dcor']:.3f}, p-value: {result['p_value']:.4f}")
 result = mutual_info_score(df['X'], df['Y'])
 print(f"MI: {result['mi_normalized']:.3f}")
 
+# 最大信息系数 (MIC)
+# 注意：当前 MIC 为纯 Python 实现，计算速度较慢
+# 对于大数据集，建议先采样：smart_sample(df, sample_size=500)
+result = maximal_information_coefficient(df['X'], df['Y'])
+print(f"MIC: {result['mic']:.3f}")
+
 # 生成非线性检测报告
 report = nonlinear_dependency_report(df, top_n=10)
 print(report)
 ```
+
+> **MIC 性能说明**：当前版本的 MIC 实现为纯 Python 编写，没有特殊优化，计算速度较慢。对于大数据集（n > 1000），建议先使用 `smart_sample` 进行采样处理。
 
 ### 示例 7: 数据清洗和预处理
 

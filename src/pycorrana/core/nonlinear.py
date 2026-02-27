@@ -624,6 +624,10 @@ def maximal_information_coefficient(x: np.ndarray,
     - I*：在i×j网格下的最大互信息
     - 分母log(min(i,j))：归一化因子
     
+    .. warning::
+       当前版本为纯 Python 实现，没有特殊优化，计算速度较慢。
+       对于大数据集（n > 1000），建议先进行采样处理。
+    
     Parameters
     ----------
     x, y : np.ndarray
@@ -657,6 +661,12 @@ def maximal_information_coefficient(x: np.ndarray,
     >>> y = x**2 + np.random.randn(100) * 0.1
     >>> result = maximal_information_coefficient(x, y, return_pvalue=True)
     >>> print(f"MIC: {result['mic']:.4f}, p-value: {result['p_value']:.4f}")
+    
+    对于大数据集，建议先采样：
+    
+    >>> from pycorrana.utils import smart_sample
+    >>> sampled_df = smart_sample(df, sample_size=500)
+    >>> result = maximal_information_coefficient(sampled_df['x'], sampled_df['y'])
     
     References
     ----------

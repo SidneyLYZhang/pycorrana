@@ -23,7 +23,7 @@ PyCorrAna - Python Correlation Analysis Toolkit
 $ pycorrana-interactive
 """
 
-__version__ = "0.1.5"
+__version__ = "0.1.6"
 __author__ = "SidneyZhang<zly@lyzhang.me>"
 
 from .core.analyzer import quick_corr, CorrAnalyzer

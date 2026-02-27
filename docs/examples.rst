@@ -266,6 +266,7 @@
    print(f"互信息: {mi:.4f}")
 
 最大信息系数
+最大信息系数
 ------------
 
 .. code-block:: python
@@ -273,7 +274,19 @@
    from pycorrana import maximal_information_coefficient
 
    mic = maximal_information_coefficient(df['x'], df['y'])
-   print(f"MIC: {mic:.4f}")
+   print(f"MIC: {mic['mic']:.4f}")
+
+.. note::
+
+   **性能说明**：当前 MIC 实现为纯 Python 版本，计算速度较慢。对于大数据集，建议先采样：
+
+   .. code-block:: python
+
+      from pycorrana.utils import smart_sample
+
+      # 采样后再计算 MIC
+      sampled_df = smart_sample(df, sample_size=500)
+      mic = maximal_information_coefficient(sampled_df['x'], sampled_df['y'])
 
 非线性依赖报告
 --------------

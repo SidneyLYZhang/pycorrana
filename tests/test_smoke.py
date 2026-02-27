@@ -34,7 +34,7 @@ class TestSmokeWheel(unittest.TestCase):
         import pycorrana
         
         self.assertIsNotNone(pycorrana.__version__)
-        self.assertEqual(pycorrana.__version__, "0.1.5")
+        self.assertEqual(pycorrana.__version__, "0.1.6")
     
     def test_import_core_modules(self):
         """Test that core modules can be imported"""

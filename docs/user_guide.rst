@@ -476,6 +476,26 @@ CSV 导出
    result = maximal_information_coefficient(df['x'], df['y'])
    print(f"MIC: {result['mic']:.4f}")
 
+.. warning::
+
+   **使用注意事项**
+
+   当前版本的 MIC 实现完全使用 Python 编写，没有进行特殊优化，计算速度较慢。
+
+   - 对于大数据集（如 n > 1000），计算时间可能较长
+   - 如需快速计算，建议先对数据进行采样
+   - 如果对性能有较高要求，可以考虑使用 `minepy <https://github.com/minepy/minepy>`_ 库
+
+   **性能优化建议**：
+
+   .. code-block:: python
+
+      # 对于大数据集，建议先采样
+      from pycorrana.utils import smart_sample
+
+      sampled_df = smart_sample(df, sample_size=500)
+      result = maximal_information_coefficient(sampled_df['x'], sampled_df['y'])
+
 非线性依赖报告
 --------------
 
