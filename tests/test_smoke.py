@@ -3,7 +3,7 @@ Smoke Tests
 ===========
 
 Smoke tests for verifying package installation and basic functionality.
-These tests ensure the package can be installed from both wheel and source distribution.
+These tests ensure that package can be installed from both wheel and source distribution.
 """
 
 import subprocess
@@ -11,6 +11,7 @@ import sys
 import tempfile
 import shutil
 from pathlib import Path
+import numpy as np
 
 import unittest
 
@@ -19,7 +20,7 @@ class TestSmokeWheel(unittest.TestCase):
     """
     Smoke test for wheel distribution.
     
-    Tests that the package can be installed from a wheel and basic functionality works.
+    Tests that package can be installed from a wheel and basic functionality works.
     """
     
     @classmethod
@@ -29,11 +30,11 @@ class TestSmokeWheel(unittest.TestCase):
         cls.wheel_dir = cls.project_root / "dist"
     
     def test_import_package(self):
-        """Test that the package can be imported"""
+        """Test that package can be imported"""
         import pycorrana
         
         self.assertIsNotNone(pycorrana.__version__)
-        self.assertEqual(pycorrana.__version__, "0.1.0")
+        self.assertEqual(pycorrana.__version__, "0.1.5")
     
     def test_import_core_modules(self):
         """Test that core modules can be imported"""
@@ -132,8 +133,119 @@ class TestSmokeWheel(unittest.TestCase):
         
         self.assertIn('correlation_matrix', result)
         self.assertIn('pvalue_matrix', result)
+        self.assertIn('confidence_interval_matrix', result)
         self.assertIn('significant_pairs', result)
         self.assertGreaterEqual(result['correlation_matrix'].shape[0], 3)
+        
+        # 测试significant_pairs中是否包含置信区间
+        if result['significant_pairs']:
+            first_pair = result['significant_pairs'][0]
+            self.assertIn('confidence_interval', first_pair)
+    
+    def test_confidence_interval_functionality(self):
+        """Test confidence interval calculation in CorrAnalyzer"""
+        from pycorrana import CorrAnalyzer, make_correlated_data
+        
+        df = make_correlated_data(n_samples=100, n_features=4, correlation=0.7)
+        analyzer = CorrAnalyzer(df, verbose=False)
+        result = analyzer.fit()
+        
+        # 验证置信区间矩阵存在
+        self.assertIn('confidence_interval_matrix', result)
+        ci_matrix = result['confidence_interval_matrix']
+        
+        # 验证矩阵形状
+        self.assertEqual(ci_matrix.shape, result['correlation_matrix'].shape)
+        
+        # 验证对角线为(1.0, 1.0)
+        for i in range(len(ci_matrix)):
+            ci = ci_matrix.iloc[i, i]
+            self.assertIsNotNone(ci)
+            if ci is not None and not (isinstance(ci, float) and np.isnan(ci)):
+                self.assertEqual(ci[0], 1.0)
+                self.assertEqual(ci[1], 1.0)
+    
+    def test_mutual_info_score_with_pvalue_and_ci(self):
+        """Test mutual_info_score with p-value and confidence interval"""
+        from pycorrana import mutual_info_score
+        
+        # 创建相关数据
+        x = np.random.randn(100)
+        y = x**2 + np.random.randn(100) * 0.1
+        
+        # 测试不返回p值
+        result1 = mutual_info_score(x, y, return_pvalue=False)
+        self.assertIn('mi', result1)
+        self.assertIn('mi_normalized', result1)
+        self.assertIn('confidence_interval', result1)
+        self.assertIn('confidence_interval_normalized', result1)
+        self.assertNotIn('p_value', result1)
+        
+        # 测试返回p值
+        result2 = mutual_info_score(x, y, return_pvalue=True, n_permutations=100)
+        self.assertIn('mi', result2)
+        self.assertIn('mi_normalized', result2)
+        self.assertIn('p_value', result2)
+        self.assertIn('confidence_interval', result2)
+        self.assertIn('confidence_interval_normalized', result2)
+        
+        # 验证p值在合理范围内
+        self.assertGreaterEqual(result2['p_value'], 0.0)
+        self.assertLessEqual(result2['p_value'], 1.0)
+        
+        # 验证置信区间是元组
+        self.assertIsInstance(result2['confidence_interval'], tuple)
+        self.assertEqual(len(result2['confidence_interval']), 2)
+    
+    def test_maximal_information_coefficient_with_pvalue_and_ci(self):
+        """Test maximal_information_coefficient with p-value and confidence interval"""
+        from pycorrana import maximal_information_coefficient
+        
+        # 创建相关数据
+        x = np.random.randn(100)
+        y = x**2 + np.random.randn(100) * 0.1
+        
+        # 测试不返回p值
+        result1 = maximal_information_coefficient(x, y, return_pvalue=False)
+        self.assertIn('mic', result1)
+        self.assertIn('confidence_interval', result1)
+        self.assertNotIn('p_value', result1)
+        
+        # 测试返回p值
+        result2 = maximal_information_coefficient(x, y, return_pvalue=True, n_permutations=100)
+        self.assertIn('mic', result2)
+        self.assertIn('p_value', result2)
+        self.assertIn('confidence_interval', result2)
+        
+        # 验证p值在合理范围内
+        self.assertGreaterEqual(result2['p_value'], 0.0)
+        self.assertLessEqual(result2['p_value'], 1.0)
+        
+        # 验证置信区间是元组
+        self.assertIsInstance(result2['confidence_interval'], tuple)
+        self.assertEqual(len(result2['confidence_interval']), 2)
+    
+    def test_distance_correlation_with_pvalue(self):
+        """Test distance_correlation with p-value"""
+        from pycorrana import distance_correlation
+        
+        # 创建相关数据
+        x = np.random.randn(100)
+        y = x**2 + np.random.randn(100) * 0.1
+        
+        # 测试不返回p值
+        result1 = distance_correlation(x, y, return_pvalue=False)
+        self.assertIn('dcor', result1)
+        self.assertNotIn('p_value', result1)
+        
+        # 测试返回p值
+        result2 = distance_correlation(x, y, return_pvalue=True, n_permutations=100)
+        self.assertIn('dcor', result2)
+        self.assertIn('p_value', result2)
+        
+        # 验证p值在合理范围内
+        self.assertGreaterEqual(result2['p_value'], 0.0)
+        self.assertLessEqual(result2['p_value'], 1.0)
     
     def test_cli_entry_points(self):
         """Test that CLI entry points are registered"""
@@ -151,7 +263,7 @@ class TestSmokeSourceDistribution(unittest.TestCase):
     """
     Smoke test for source distribution.
     
-    Tests that the source distribution contains all necessary files.
+    Tests that source distribution contains all necessary files.
     """
     
     @classmethod

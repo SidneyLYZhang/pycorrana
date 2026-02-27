@@ -89,6 +89,7 @@ class CorrAnalyzer:
         self.type_mapping = {}
         self.corr_matrix = None
         self.pvalue_matrix = None
+        self.confidence_interval_matrix = None
         self.significant_pairs = []
         self.methods_used = {}
         
@@ -197,9 +198,11 @@ class CorrAnalyzer:
         n_cols = len(all_cols)
         corr_array = np.full((n_cols, n_cols), np.nan, dtype=np.float64)
         pvalue_array = np.full((n_cols, n_cols), np.nan, dtype=np.float64)
+        ci_array = np.full((n_cols, n_cols), np.nan, dtype=object)
         
         self.corr_matrix = pd.DataFrame(corr_array, index=all_cols, columns=all_cols)
         self.pvalue_matrix = pd.DataFrame(pvalue_array, index=all_cols, columns=all_cols)
+        self.confidence_interval_matrix = pd.DataFrame(ci_array, index=all_cols, columns=all_cols)
         
         # 对角线为1
         for i in range(n_cols):
@@ -211,24 +214,26 @@ class CorrAnalyzer:
         pairs_list = []
         
         for col1, col2, pair_type in pairs:
-            corr_val, p_val, method_used = self._compute_pair(col1, col2, pair_type)
+            corr_val, p_val, method_used, ci = self._compute_pair(col1, col2, pair_type)
             
             self.corr_matrix.loc[col1, col2] = corr_val
             self.corr_matrix.loc[col2, col1] = corr_val
             self.pvalue_matrix.loc[col1, col2] = p_val
             self.pvalue_matrix.loc[col2, col1] = p_val
+            self.confidence_interval_matrix.loc[col1, col2] = ci
+            self.confidence_interval_matrix.loc[col2, col1] = ci
             
             self.methods_used[f"{col1}-{col2}"] = method_used
             
             pvalues_list.append(p_val)
-            pairs_list.append((col1, col2, corr_val, p_val))
+            pairs_list.append((col1, col2, corr_val, p_val, ci))
         
         # p值校正
         if pvalues_list and self.pvalue_correction:
             corrected_pvalues = correct_pvalues(pvalues_list, self.pvalue_correction)
             
             # 更新显著性对列表
-            for i, (col1, col2, corr_val, orig_p) in enumerate(pairs_list):
+            for i, (col1, col2, corr_val, orig_p, ci) in enumerate(pairs_list):
                 corr_p = corrected_pvalues[i] if i < len(corrected_pvalues) else orig_p
                 
                 if corr_p < 0.05:  # 显著性水平
@@ -237,6 +242,7 @@ class CorrAnalyzer:
                         'var2': col2,
                         'correlation': corr_val,
                         'p_value': corr_p,
+                        'confidence_interval': ci,
                         'method': self.methods_used.get(f"{col1}-{col2}", "unknown"),
                         'interpretation': interpret_correlation(corr_val)
                     })
@@ -250,14 +256,14 @@ class CorrAnalyzer:
         return self
     
     def _compute_pair(self, col1: str, col2: str, 
-                     pair_type: str) -> Tuple[float, float, str]:
+                     pair_type: str) -> Tuple[float, float, str, Optional[Tuple[float, float]]]:
         """
         计算单个变量对的相关性。
         
         Returns
         -------
         tuple
-            (相关系数, p值, 使用的方法)
+            (相关系数, p值, 使用的方法, 置信区间)
         """
         x = self.data[col1].dropna()
         y = self.data[col2].dropna()
@@ -268,7 +274,28 @@ class CorrAnalyzer:
         y = y.loc[common_idx]
         
         if len(x) < 3:
-            return np.nan, np.nan, "insufficient_data"
+            return np.nan, np.nan, "insufficient_data", None
+        
+        # 计算置信区间的辅助函数
+        def compute_confidence_interval(r, n, method='pearson'):
+            """计算相关系数的95%置信区间"""
+            if abs(r) == 1:
+                return (r, r)
+            
+            # Fisher变换
+            z = np.arctanh(r)
+            se = 1 / np.sqrt(n - 3)
+            z_crit = stats.norm.ppf(0.975)
+            
+            # 计算置信区间
+            ci_lower = np.tanh(z - z_crit * se)
+            ci_upper = np.tanh(z + z_crit * se)
+            
+            # 限制在[-1, 1]范围内
+            ci_lower = max(-1, ci_lower)
+            ci_upper = min(1, ci_upper)
+            
+            return (ci_lower, ci_upper)
         
         # 根据配对类型选择方法
         if self.method == 'auto':
@@ -280,36 +307,55 @@ class CorrAnalyzer:
                 if x_normal and y_normal:
                     # Pearson
                     r, p = stats.pearsonr(x, y)
-                    return r, p, "pearson"
+                    ci = compute_confidence_interval(r, len(x), 'pearson')
+                    return r, p, "pearson", ci
                 else:
                     # Spearman更稳健
                     r, p = stats.spearmanr(x, y)
-                    return r, p, "spearman"
+                    ci = compute_confidence_interval(r, len(x), 'spearman')
+                    return r, p, "spearman", ci
             
             elif pair_type == 'numeric_binary':
                 # 数值+二分类：点双列相关
                 r, p = point_biserial(x, y)
-                return r, p, "point_biserial"
+                ci = compute_confidence_interval(r, len(x))
+                return r, p, "point_biserial", ci
             
             elif pair_type == 'numeric_categorical':
                 # 数值+多分类：Eta系数
                 eta, p = eta_coefficient(x, y)
-                return eta, p, "eta"
+                # Eta系数的置信区间计算（近似）
+                ci = compute_confidence_interval(eta, len(x))
+                return eta, p, "eta", ci
             
             elif pair_type == 'categorical_categorical':
                 # 分类+分类：Cramér's V
                 v, p = cramers_v(x, y)
-                return v, p, "cramers_v"
+                # Cramér's V的置信区间计算（近似）
+                ci = compute_confidence_interval(v, len(x))
+                return v, p, "cramers_v", ci
             
             elif pair_type == 'ordinal_ordinal':
                 # 有序+有序：Kendall's Tau
                 tau, p = stats.kendalltau(x, y)
-                return tau, p, "kendall"
+                # Kendall's Tau的置信区间
+                n = len(x)
+                if n > 10:
+                    # 使用正态近似
+                    se = 1 / np.sqrt(n * (n - 1) / 2 - 1)
+                    z_crit = stats.norm.ppf(0.975)
+                    ci_lower = max(-1, tau - z_crit * se)
+                    ci_upper = min(1, tau + z_crit * se)
+                    ci = (ci_lower, ci_upper)
+                else:
+                    ci = (np.nan, np.nan)
+                return tau, p, "kendall", ci
             
             else:
                 # 默认使用Spearman
                 r, p = stats.spearmanr(x, y)
-                return r, p, "spearman"
+                ci = compute_confidence_interval(r, len(x), 'spearman')
+                return r, p, "spearman", ci
         
         else:
             # 使用用户指定的方法
@@ -323,18 +369,31 @@ class CorrAnalyzer:
             y = y[valid_mask]
             
             if len(x) < 3:
-                return np.nan, np.nan, "insufficient_data"
+                return np.nan, np.nan, "insufficient_data", None
             
             if self.method == 'pearson':
                 r, p = stats.pearsonr(x, y)
+                ci = compute_confidence_interval(r, len(x), 'pearson')
             elif self.method == 'spearman':
                 r, p = stats.spearmanr(x, y)
+                ci = compute_confidence_interval(r, len(x), 'spearman')
             elif self.method == 'kendall':
-                r, p = stats.kendalltau(x, y)
+                tau, p = stats.kendalltau(x, y)
+                # Kendall's Tau的置信区间
+                n = len(x)
+                if n > 10:
+                    se = 1 / np.sqrt(n * (n - 1) / 2 - 1)
+                    z_crit = stats.norm.ppf(0.975)
+                    ci_lower = max(-1, tau - z_crit * se)
+                    ci_upper = min(1, tau + z_crit * se)
+                    ci = (ci_lower, ci_upper)
+                else:
+                    ci = (np.nan, np.nan)
+                r = tau
             else:
                 raise ValueError(f"未知的方法: {self.method}")
             
-            return r, p, self.method
+            return r, p, self.method, ci
     
     def fit(self, target: Optional[str] = None,
             columns: Optional[List[str]] = None) -> Dict:
@@ -362,6 +421,7 @@ class CorrAnalyzer:
         return {
             'correlation_matrix': self.corr_matrix,
             'pvalue_matrix': self.pvalue_matrix,
+            'confidence_interval_matrix': self.confidence_interval_matrix,
             'significant_pairs': self.significant_pairs,
             'methods_used': self.methods_used,
             'type_mapping': self.type_mapping

@@ -168,7 +168,9 @@ def distance_correlation_matrix(data: pd.DataFrame,
 def mutual_info_score(x: np.ndarray,
                      y: np.ndarray,
                      discrete_features: bool = False,
-                     n_neighbors: int = 3) -> dict:
+                     n_neighbors: int = 3,
+                     return_pvalue: bool = False,
+                     n_permutations: int = 1000) -> dict:
     """
     计算互信息分数。
     
@@ -182,18 +184,22 @@ def mutual_info_score(x: np.ndarray,
         x是否为离散变量
     n_neighbors : int, default=3
         KNN估计的邻居数
+    return_pvalue : bool, default=False
+        是否计算p值（通过置换检验）
+    n_permutations : int, default=1000
+        置换检验次数
         
     Returns
     -------
     dict
-        包含互信息分数的字典
+        包含互信息分数、p值和置信区间的字典
         
     Examples
     --------
     >>> x = np.random.randn(100)
     >>> y = np.sin(x) + np.random.randn(100) * 0.1
-    >>> result = mutual_info_score(x, y)
-    >>> print(f"MI: {result['mi']:.4f}, Normalized: {result['mi_normalized']:.4f}")
+    >>> result = mutual_info_score(x, y, return_pvalue=True)
+    >>> print(f"MI: {result['mi']:.4f}, Normalized: {result['mi_normalized']:.4f}, p-value: {result['p_value']:.4f}")
     """
     x = np.asarray(x).flatten()
     y = np.asarray(y).flatten()
@@ -205,7 +211,7 @@ def mutual_info_score(x: np.ndarray,
     n = len(x)
     
     if n < 3:
-        return {'mi': 0.0, 'mi_normalized': 0.0, 'n': n}
+        return {'mi': 0.0, 'mi_normalized': 0.0, 'n': n, 'p_value': np.nan, 'confidence_interval': (np.nan, np.nan)}
     
     # 使用sklearn的互信息计算
     try:
@@ -242,13 +248,88 @@ def mutual_info_score(x: np.ndarray,
     else:
         mi_normalized = 0.0
     
-    return {
+    result = {
         'mi': mi,
         'mi_normalized': mi_normalized,
         'entropy_x': h_x,
         'entropy_y': h_y,
         'n': n
     }
+    
+    # 计算p值（置换检验）
+    if return_pvalue:
+        count = 0
+        mi_obs = mi
+        
+        for _ in range(n_permutations):
+            y_perm = np.random.permutation(y)
+            try:
+                mi_perm = mutual_info_regression(
+                    x.reshape(-1, 1), 
+                    y_perm,
+                    discrete_features=discrete_features,
+                    n_neighbors=n_neighbors,
+                    random_state=42
+                )[0]
+            except Exception:
+                mi_perm = 0.0
+            
+            if mi_perm >= mi_obs:
+                count += 1
+        
+        p_value = (count + 1) / (n_permutations + 1)
+        result['p_value'] = p_value
+    
+    # 计算置信区间（基于Bootstrap）
+    if n >= 30:
+        n_bootstrap = 1000
+        mi_bootstrap = []
+        mi_normalized_bootstrap = []
+        
+        for _ in range(n_bootstrap):
+            # 有放回抽样
+            indices = np.random.choice(n, size=n, replace=True)
+            x_boot = x[indices]
+            y_boot = y[indices]
+            
+            try:
+                mi_boot = mutual_info_regression(
+                    x_boot.reshape(-1, 1), 
+                    y_boot,
+                    discrete_features=discrete_features,
+                    n_neighbors=n_neighbors,
+                    random_state=42
+                )[0]
+            except Exception:
+                mi_boot = 0.0
+            
+            mi_bootstrap.append(mi_boot)
+            
+            # 计算归一化互信息
+            x_boot_discrete = pd.qcut(x_boot, q=min(10, len(x_boot)//5), duplicates='drop', labels=False)
+            y_boot_discrete = pd.qcut(y_boot, q=min(10, len(y_boot)//5), duplicates='drop', labels=False)
+            
+            h_x_boot = calc_entropy(x_boot_discrete)
+            h_y_boot = calc_entropy(y_boot_discrete)
+            
+            if h_x_boot > 0 and h_y_boot > 0:
+                mi_normalized_boot = mi_boot / min(h_x_boot, h_y_boot)
+            else:
+                mi_normalized_boot = 0.0
+            
+            mi_normalized_bootstrap.append(mi_normalized_boot)
+        
+        # 计算95%置信区间
+        ci_mi = np.percentile(mi_bootstrap, [2.5, 97.5])
+        ci_mi_normalized = np.percentile(mi_normalized_bootstrap, [2.5, 97.5])
+        
+        result['confidence_interval'] = (ci_mi[0], ci_mi[1])
+        result['confidence_interval_normalized'] = (ci_mi_normalized[0], ci_mi_normalized[1])
+    else:
+        result['confidence_interval'] = (np.nan, np.nan)
+        result['confidence_interval_normalized'] = (np.nan, np.nan)
+    
+    return result
 
 
 def mutual_info_matrix(data: pd.DataFrame,
@@ -295,61 +376,350 @@ def mutual_info_matrix(data: pd.DataFrame,
     return mi_matrix
 
 
+def _optimal_partition_1d(sorted_values: np.ndarray, k: int) -> np.ndarray:
+    """
+    使用动态规划找到一维数据的最优划分边界。
+    
+    目标是找到k-1个边界点，使得划分后的熵最小（信息量最大）。
+    
+    Parameters
+    ----------
+    sorted_values : np.ndarray
+        已排序的值
+    k : int
+        划分区间数
+        
+    Returns
+    -------
+    np.ndarray
+        最优边界位置（索引）
+    """
+    n = len(sorted_values)
+    if k <= 1 or n < k:
+        return np.array([])
+    
+    unique_vals, counts = np.unique(sorted_values, return_counts=True)
+    n_unique = len(unique_vals)
+    
+    if n_unique <= k:
+        boundaries = np.arange(1, n_unique)
+        return boundaries
+    
+    cumsum = np.cumsum(counts)
+    total = cumsum[-1]
+    
+    def calc_entropy_range(start: int, end: int) -> float:
+        if start >= end:
+            return 0.0
+        count = cumsum[end] - (cumsum[start - 1] if start > 0 else 0)
+        if count == 0:
+            return 0.0
+        p = count / total
+        return -p * np.log(p)
+    
+    dp = np.full((n_unique + 1, k + 1), -np.inf)
+    split = np.zeros((n_unique + 1, k + 1), dtype=int)
+    
+    for i in range(1, n_unique + 1):
+        dp[i, 1] = calc_entropy_range(0, i - 1)
+    
+    for j in range(2, k + 1):
+        for i in range(j, n_unique + 1):
+            for t in range(j - 1, i):
+                val = dp[t, j - 1] + calc_entropy_range(t, i - 1)
+                if val > dp[i, j]:
+                    dp[i, j] = val
+                    split[i, j] = t
+    
+    boundaries = []
+    i, j = n_unique, k
+    while j > 1:
+        boundaries.append(split[i, j])
+        i = split[i, j]
+        j -= 1
+    
+    boundaries = sorted(boundaries)
+    return np.array(boundaries)
+
+
+def _compute_mutual_info_discrete(x_discrete: np.ndarray, y_discrete: np.ndarray) -> float:
+    """
+    计算离散变量的互信息。
+    
+    Parameters
+    ----------
+    x_discrete, y_discrete : np.ndarray
+        离散化后的变量
+        
+    Returns
+    -------
+    float
+        互信息值
+    """
+    n = len(x_discrete)
+    
+    joint_counts = {}
+    for i in range(n):
+        key = (x_discrete[i], y_discrete[i])
+        joint_counts[key] = joint_counts.get(key, 0) + 1
+    
+    x_counts = {}
+    y_counts = {}
+    for (xi, yi), count in joint_counts.items():
+        x_counts[xi] = x_counts.get(xi, 0) + count
+        y_counts[yi] = y_counts.get(yi, 0) + count
+    
+    mi = 0.0
+    for (xi, yi), count in joint_counts.items():
+        p_xy = count / n
+        p_x = x_counts[xi] / n
+        p_y = y_counts[yi] / n
+        mi += p_xy * np.log(p_xy / (p_x * p_y))
+    
+    return mi
+
+
+def _find_optimal_grid(x: np.ndarray, y: np.ndarray, i: int, j: int) -> float:
+    """
+    在i×j网格下找到最优划分并计算最大互信息。
+    
+    Parameters
+    ----------
+    x, y : np.ndarray
+        原始数据
+    i, j : int
+        网格分辨率
+        
+    Returns
+    -------
+    float
+        最优划分下的互信息
+    """
+    n = len(x)
+    
+    sort_idx_x = np.argsort(x)
+    x_sorted = x[sort_idx_x]
+    y_by_x = y[sort_idx_x]
+    
+    x_boundaries = _optimal_partition_1d(x_sorted, i)
+    
+    if len(x_boundaries) == 0:
+        x_discrete = np.zeros(n, dtype=int)
+    else:
+        x_discrete = np.searchsorted(x_boundaries, np.arange(n))
+        x_discrete = np.searchsorted(x_boundaries, np.searchsorted(x_sorted, x))
+    
+    sort_idx_y = np.argsort(y)
+    y_sorted = y[sort_idx_y]
+    x_by_y = x[sort_idx_y]
+    
+    y_boundaries = _optimal_partition_1d(y_sorted, j)
+    
+    if len(y_boundaries) == 0:
+        y_discrete = np.zeros(n, dtype=int)
+    else:
+        y_discrete = np.searchsorted(y_boundaries, np.searchsorted(y_sorted, y))
+    
+    mi = _compute_mutual_info_discrete(x_discrete, y_discrete)
+    
+    return mi
+
+
+def _compute_mic_core(x: np.ndarray, y: np.ndarray, B: Optional[float] = None) -> dict:
+    """
+    计算MIC的核心函数。
+    
+    MIC = max_{i*j < B} I*(X,Y,i,j) / log(min(i,j))
+    
+    Parameters
+    ----------
+    x, y : np.ndarray
+        输入数据
+    B : float, optional
+        网格复杂度上限，默认为n^0.6
+        
+    Returns
+    -------
+    dict
+        包含MIC及相关统计量的字典
+    """
+    n = len(x)
+    
+    if B is None:
+        B = n ** 0.6
+    
+    B = int(B)
+    B = max(B, 4)
+    
+    mic = 0.0
+    best_i, best_j = 2, 2
+    mas = 0.0
+    mev = 0.0
+    
+    max_grid = min(B, int(np.sqrt(n)))
+    max_grid = max(max_grid, 2)
+    
+    scores_matrix = {}
+    
+    for i in range(2, max_grid + 1):
+        for j in range(2, max_grid + 1):
+            if i * j > B:
+                continue
+            
+            mi_optimal = _find_optimal_grid(x, y, i, j)
+            
+            normalization = np.log(min(i, j))
+            if normalization > 0:
+                score = mi_optimal / normalization
+            else:
+                score = 0.0
+            
+            scores_matrix[(i, j)] = score
+            
+            if score > mic:
+                mic = score
+                best_i, best_j = i, j
+            
+            if i == j:
+                if score > mas:
+                    mas = score
+    
+    if mic > 0:
+        for (i, j), score in scores_matrix.items():
+            if score > 0:
+                ratio = score / mic
+                if ratio > mev:
+                    mev = ratio
+    
+    mcn = best_i * best_j
+    
+    return {
+        'mic': mic,
+        'mas': mas,
+        'mev': mev,
+        'mcn': mcn,
+        'best_grid': (best_i, best_j)
+    }
+
+
 def maximal_information_coefficient(x: np.ndarray,
                                    y: np.ndarray,
-                                   bins: int = 10) -> dict:
+                                   B: Optional[float] = None,
+                                   return_pvalue: bool = False,
+                                   n_permutations: int = 1000,
+                                   confidence_level: float = 0.95,
+                                   n_bootstrap: int = 500) -> dict:
     """
     计算最大信息系数（Maximal Information Coefficient, MIC）。
     
     MIC可以检测各种函数关系的强度，范围在[0, 1]。
+    使用完整的MIC算法实现，包括最优网格划分和归一化。
+    
+    核心公式：
+    MIC(X,Y) = max_{i*j < B} I*(X,Y,i,j) / log(min(i,j))
+    
+    其中：
+    - i, j：X轴和Y轴的网格划分数量
+    - B = n^0.6：网格复杂度上限
+    - I*：在i×j网格下的最大互信息
+    - 分母log(min(i,j))：归一化因子
     
     Parameters
     ----------
     x, y : np.ndarray
         两个变量的观测值
-    bins : int, default=10
-        最大分箱数
+    B : float, optional
+        网格复杂度上限，默认为n^0.6
+    return_pvalue : bool, default=False
+        是否计算p值（通过置换检验）
+    n_permutations : int, default=1000
+        置换检验次数
+    confidence_level : float, default=0.95
+        置信区间水平
+    n_bootstrap : int, default=500
+        Bootstrap抽样次数
         
     Returns
     -------
     dict
-        包含MIC和MAS等统计量的字典
+        包含以下键的字典：
+        - mic: MIC值，范围[0, 1]
+        - mas: 最大对称得分（Maximum Asymmetry Score）
+        - mev: 最大边缘值（Maximum Edge Value）
+        - mcn: 最大网格数（Maximum Cell Number）
+        - n: 样本量
+        - p_value: p值（如果return_pvalue=True）
+        - confidence_interval: 置信区间（如果样本量足够）
         
+    Examples
+    --------
+    >>> x = np.random.randn(100)
+    >>> y = x**2 + np.random.randn(100) * 0.1
+    >>> result = maximal_information_coefficient(x, y, return_pvalue=True)
+    >>> print(f"MIC: {result['mic']:.4f}, p-value: {result['p_value']:.4f}")
+    
     References
     ----------
     Reshef et al. (2011) "Detecting Novel Associations in Large Data Sets"
     Science, 334(6062), 1518-1524
     """
-    try:
-        from minepy import MINE
-        
-        x = np.asarray(x).flatten()
-        y = np.asarray(y).flatten()
-        
-        # 删除缺失值
-        mask = ~(np.isnan(x) | np.isnan(y))
-        x, y = x[mask], y[mask]
-        
-        mine = MINE(alpha=0.6, c=15)
-        mine.compute_score(x, y)
-        
-        return {
-            'mic': mine.mic(),
-            'mas': mine.mas(),
-            'mev': mine.mev(),
-            'mcn': mine.mcn(),
-            'n': len(x)
-        }
-    except ImportError:
-        warnings.warn("minepy未安装，无法计算MIC。使用互信息代替。")
-        result = mutual_info_score(x, y)
-        return {
-            'mic': result['mi_normalized'],
+    x = np.asarray(x).flatten()
+    y = np.asarray(y).flatten()
+    
+    mask = ~(np.isnan(x) | np.isnan(y))
+    x, y = x[mask], y[mask]
+    
+    n = len(x)
+    
+    if n < 10:
+        base_result = {
+            'mic': np.nan,
             'mas': np.nan,
             'mev': np.nan,
             'mcn': np.nan,
-            'n': result['n']
+            'n': n,
+            'confidence_interval': (np.nan, np.nan)
         }
+        if return_pvalue:
+            base_result['p_value'] = np.nan
+        return base_result
+    
+    result = _compute_mic_core(x, y, B)
+    result['n'] = n
+    
+    if return_pvalue:
+        count = 0
+        mic_obs = result['mic']
+        
+        for _ in range(n_permutations):
+            y_perm = np.random.permutation(y)
+            perm_result = _compute_mic_core(x, y_perm, B)
+            if perm_result['mic'] >= mic_obs:
+                count += 1
+        
+        p_value = (count + 1) / (n_permutations + 1)
+        result['p_value'] = p_value
+    
+    if n >= 30:
+        mic_bootstrap = []
+        
+        for _ in range(n_bootstrap):
+            indices = np.random.choice(n, size=n, replace=True)
+            x_boot = x[indices]
+            y_boot = y[indices]
+            
+            boot_result = _compute_mic_core(x_boot, y_boot, B)
+            mic_bootstrap.append(boot_result['mic'])
+        
+        alpha = 1 - confidence_level
+        lower = np.percentile(mic_bootstrap, alpha / 2 * 100)
+        upper = np.percentile(mic_bootstrap, (1 - alpha / 2) * 100)
+        
+        result['confidence_interval'] = (lower, upper)
+    else:
+        result['confidence_interval'] = (np.nan, np.nan)
+    
+    return result
 
 
 def nonlinear_dependency_report(data: pd.DataFrame,
