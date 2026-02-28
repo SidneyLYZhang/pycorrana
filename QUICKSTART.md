@@ -83,6 +83,7 @@ pycorrana nonlinear data.csv --top 20
 | 半偏相关 | `semipartial_corr(df, x='A', y='B', covars='Z')` |
 | 距离相关 | `distance_correlation(df['A'], df['B'])` |
 | 互信息 | `mutual_info_score(df['A'], df['B'])` |
+| 典型相关 | `cca(df[X_vars], df[Y_vars])` |
 | 大数据优化 | `CorrAnalyzer(df, large_data_config=config)` |
 
 ## 示例数据集
@@ -163,6 +164,24 @@ print(f"MI: {result['mi_normalized']:.3f}")
 # 非线性依赖报告
 report = nonlinear_dependency_report(df, top_n=10)
 print(report)
+```
+
+## 典型相关分析
+
+```python
+from pycorrana import cca, cca_permutation_test
+
+# 典型相关分析：研究两组变量之间的关系
+result = cca(df[['x1', 'x2']], df[['y1', 'y2']])
+print(f"典型相关系数: {result['canonical_correlations']}")
+
+# 查看显著性检验
+for test in result['significance_tests']:
+    print(f"第{test['canonical_index']}典型相关: r={test['canonical_correlation']:.3f}, p={test['p_value']:.4f}")
+
+# 置换检验
+perm_result = cca_permutation_test(df[['x1', 'x2']], df[['y1', 'y2']], n_permutations=1000)
+print(f"置换检验 p 值: {perm_result['p_value']:.4f}")
 ```
 
 ## 数据清洗

@@ -13,6 +13,11 @@ from .nonlinear import (
     nonlinear_dependency_report,
     NonlinearAnalyzer
 )
+from .cca import (
+    cca,
+    cca_permutation_test,
+    CCAAnalyzer
+)
 
 __all__ = [
     'quick_corr',
@@ -26,4 +31,7 @@ __all__ = [
     'maximal_information_coefficient',
     'nonlinear_dependency_report',
     'NonlinearAnalyzer',
+    'cca',
+    'cca_permutation_test',
+    'CCAAnalyzer',
 ]

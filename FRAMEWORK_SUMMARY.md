@@ -78,7 +78,17 @@ PyCorrAna 是一个完整的 Python 相关性分析工具包，实现了用户�
 | MIC | `core/nonlinear.py:maximal_information_coefficient()` | 最大信息系数 |
 | 分析器类 | `core/nonlinear.py:NonlinearAnalyzer` | 完整分析流程 |
 
-### 八、大数据优化 ✅
+### 八、典型相关分析 ✅
+
+| 功能 | 实现位置 | 说明 |
+|------|---------|------|
+| 典型相关分析 | `core/cca.py:cca()` | 两组变量间的典型相关 |
+| 置换检验 | `core/cca.py:cca_permutation_test()` | 显著性验证 |
+| Wilks' Lambda | `core/cca.py:_wilks_lambda_test()` | 显著性检验 |
+| 冗余指数 | `core/cca.py:_compute_redundancy()` | 方差解释比例 |
+| 分析器类 | `core/cca.py:CCAAnalyzer` | 完整分析流程 |
+
+### 九、大数据优化 ✅
 
 | 功能 | 实现位置 | 说明 |
 |------|---------|------|
@@ -87,7 +97,7 @@ PyCorrAna 是一个完整的 Python 相关性分析工具包，实现了用户�
 | 内存优化 | `utils/large_data.py:optimize_dataframe()` | 减少内存占用 |
 | 配置类 | `utils/large_data.py:LargeDataConfig` | 灵活配置参数 |
 
-### 九、CLI 工具 ✅
+### 十、CLI 工具 ✅
 
 | 功能 | 实现位置 | 说明 |
 |------|---------|------|
@@ -106,7 +116,8 @@ pycorrana/
 │   │   ├── visualizer.py        # 可视化 (热力图、散点图等)
 │   │   ├── reporter.py          # 报告生成
 │   │   ├── partial_corr.py      # 偏相关分析
-│   │   └── nonlinear.py         # 非线性检测
+│   │   ├── nonlinear.py         # 非线性检测
+│   │   └── cca.py               # 典型相关分析
 │   ├── utils/                   # 工具函数
 │   │   ├── data_utils.py        # 数据处理
 │   │   ├── stats_utils.py       # 统计工具
@@ -133,6 +144,7 @@ pycorrana/
 from pycorrana import quick_corr, CorrAnalyzer
 from pycorrana.core.partial_corr import partial_corr
 from pycorrana.core.nonlinear import distance_correlation
+from pycorrana.core.cca import cca, CCAAnalyzer
 from pycorrana.utils import LargeDataConfig
 
 # 一行代码分析
@@ -153,6 +165,10 @@ partial_corr(df, x='income', y='happiness', covars=['age', 'education'])
 
 # 非线性检测
 distance_correlation(df['X'], df['Y'], return_pvalue=True)
+
+# 典型相关分析
+result = cca(df[['x1', 'x2', 'x3']], df[['y1', 'y2']])
+print(f"第一典型相关系数: {result['canonical_correlations'][0]:.3f}")
 ```
 
 ### CLI 工具
@@ -182,8 +198,9 @@ pycorrana-interactive
 4. **多种导出格式**：Excel/CSV/HTML/Markdown
 5. **双重CLI**：分模块CLI + 交互式CLI
 6. **大数据优化**：智能采样、分块计算、内存优化
-7. **完善的文档**：README + 架构文档 + 快速入门 + 示例代码
-8. **现代Python**：支持 Python 3.10-3.13
+7. **典型相关分析**：支持两组变量间的多元相关性分析
+8. **完善的文档**：README + 架构文档 + 快速入门 + 示例代码
+9. **现代Python**：支持 Python 3.10-3.13
 
 ## 测试验证
 
@@ -217,6 +234,7 @@ PyCorrAna 完整实现了用户的所有需求，提供了：
 - ✅ 完善的CLI工具
 - ✅ 偏相关分析
 - ✅ 非线性依赖检测
+- ✅ 典型相关分析
 - ✅ 交互式界面
 - ✅ 示例数据集
 - ✅ 大数据优化

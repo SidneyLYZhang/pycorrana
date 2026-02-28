@@ -506,27 +506,121 @@ CSV 导出
    report = nonlinear_dependency_report(df, top_n=10)
    print(report)
 
+典型相关分析
+============
+
+典型相关分析（Canonical Correlation Analysis, CCA）是一种多元统计方法，
+用于研究两组变量之间的线性关系。它寻找两组变量的线性组合，使得这些组合之间的相关性最大化。
+
+基本用法
+--------
+
+.. code-block:: python
+
+   from pycorrana import cca, load_iris
+
+   df = load_iris()
+   
+   # 定义两组变量
+   X = df[['sepal_length', 'sepal_width']]
+   Y = df[['petal_length', 'petal_width']]
+   
+   # 执行典型相关分析
+   result = cca(X, Y)
+   
+   print("典型相关系数:", result['canonical_correlations'])
+   print("第一典型相关系数:", result['canonical_correlations'][0])
+
+结果解读
+--------
+
+CCA 结果包含以下主要信息：
+
+- **典型相关系数** - 每对典型变量之间的相关性
+- **典型变量系数** - 原始变量到典型变量的转换权重
+- **Wilks' Lambda 检验** - 典型相关系数的显著性检验
+
+.. code-block:: python
+
+   result = cca(X, Y)
+   
+   # 查看检验结果
+   for test in result['significance_tests']:
+       print(f"典型相关 {test['canonical_index'] + 1}:")
+       print(f"  Wilks' Lambda: {test['wilks_lambda']:.4f}")
+       print(f"  p值: {test['p_value']:.4f}")
+       print(f"  显著性: {'是' if test['significant'] else '否'}")
+
+置换检验
+--------
+
+使用置换检验进行更稳健的显著性检验：
+
+.. code-block:: python
+
+   from pycorrana import cca_permutation_test
+
+   result = cca_permutation_test(
+       X, Y,
+       n_permutations=1000,
+       random_state=42
+   )
+   
+   print("置换检验 p 值:", result['permutation_pvalues'])
+
+CCA 分析器类
+------------
+
+使用 ``CCAAnalyzer`` 类进行更详细的分析：
+
+.. code-block:: python
+
+   from pycorrana import CCAAnalyzer
+
+   analyzer = CCAAnalyzer()
+   result = analyzer.fit(X, Y)
+   
+   # 获取典型变量得分
+   scores_x, scores_y = analyzer.get_scores(X, Y)
+   
+   # 可视化典型变量
+   analyzer.plot_canonical_pairs()
+
 使用示例数据集
 ==============
 
 加载内置数据集
 --------------
 
+PyCorrAna 提供了多个内置数据集，方便测试和学习：
+
 .. code-block:: python
 
    from pycorrana import load_iris, load_titanic, load_wine
 
+   # 鸢尾花数据集 - 经典分类数据集
    iris = load_iris()
+   print(iris.head())
+   #    sepal_length  sepal_width  petal_length  petal_width species
+   # 0           5.1          3.5           1.4          0.2  setosa
+   # ...
+
+   # 泰坦尼克号数据集 - 生存分析数据集
    titanic = load_titanic()
+
+   # 葡萄酒数据集 - 多元分析数据集
    wine = load_wine()
 
 生成模拟数据
 ------------
 
+生成具有指定相关性的模拟数据：
+
 .. code-block:: python
 
    from pycorrana import make_correlated_data
 
+   # 生成具有高相关性的数据
    df = make_correlated_data(
        n_samples=1000,
        n_features=10,

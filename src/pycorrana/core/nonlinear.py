@@ -22,7 +22,9 @@ SAMPLE_SIZE_NONLINEAR = 20_000
 def distance_correlation(x: np.ndarray, 
                         y: np.ndarray,
                         return_pvalue: bool = False,
-                        n_permutations: int = 1000) -> dict:
+                        n_permutations: int = 1000,
+                        confidence_level: float = 0.95,
+                        n_bootstrap: int = 500) -> dict:
     """
     计算距离相关系数（Distance Correlation）。
     
@@ -37,11 +39,15 @@ def distance_correlation(x: np.ndarray,
         是否计算p值（通过置换检验）
     n_permutations : int, default=1000
         置换检验次数
+    confidence_level : float, default=0.95
+        置信区间水平
+    n_bootstrap : int, default=500
+        Bootstrap抽样次数（用于计算置信区间）
         
     Returns
     -------
     dict
-        包含距离相关系数和p值的字典
+        包含距离相关系数、p值和置信区间的字典
         
     Examples
     --------
@@ -49,6 +55,7 @@ def distance_correlation(x: np.ndarray,
     >>> y = x**2 + np.random.randn(100) * 0.1
     >>> result = distance_correlation(x, y, return_pvalue=True)
     >>> print(f"dCor: {result['dcor']:.4f}, p-value: {result['p_value']:.4f}")
+    >>> print(f"95% CI: {result['confidence_interval']}")
     
     References
     ----------
@@ -59,42 +66,44 @@ def distance_correlation(x: np.ndarray,
     x = np.asarray(x).flatten()
     y = np.asarray(y).flatten()
     
-    # 删除缺失值
     mask = ~(np.isnan(x) | np.isnan(y))
     x, y = x[mask], y[mask]
     
     n = len(x)
     
     if n < 3:
-        return {'dcor': np.nan, 'p_value': np.nan}
+        return {'dcor': np.nan, 'p_value': np.nan, 'confidence_interval': (np.nan, np.nan), 'n': n}
     
-    # 计算距离矩阵
     def distance_matrix(a):
-        """计算欧氏距离矩阵"""
         return squareform(pdist(a.reshape(-1, 1), metric='euclidean'))
     
-    # 中心化距离矩阵
     def center_distance_matrix(D):
-        """双中心化距离矩阵"""
         row_mean = D.mean(axis=1, keepdims=True)
         col_mean = D.mean(axis=0, keepdims=True)
         grand_mean = D.mean()
         return D - row_mean - col_mean + grand_mean
     
-    # 计算距离矩阵
+    def _compute_dcor(x_vals, y_vals):
+        Dx = distance_matrix(x_vals)
+        Dy = distance_matrix(y_vals)
+        A = center_distance_matrix(Dx)
+        B = center_distance_matrix(Dy)
+        dcov_sq = np.mean(A * B)
+        dvar_x = np.mean(A * A)
+        dvar_y = np.mean(B * B)
+        if dvar_x > 0 and dvar_y > 0:
+            return np.sqrt(dcov_sq) / np.sqrt(np.sqrt(dvar_x) * np.sqrt(dvar_y))
+        return 0.0
+    
     Dx = distance_matrix(x)
     Dy = distance_matrix(y)
-    
-    # 双中心化
     A = center_distance_matrix(Dx)
     B = center_distance_matrix(Dy)
     
-    # 计算距离协方差和方差
     dcov_sq = np.mean(A * B)
     dvar_x = np.mean(A * A)
     dvar_y = np.mean(B * B)
     
-    # 距离相关系数
     if dvar_x > 0 and dvar_y > 0:
         dcor = np.sqrt(dcov_sq) / np.sqrt(np.sqrt(dvar_x) * np.sqrt(dvar_y))
     else:
@@ -102,7 +111,6 @@ def distance_correlation(x: np.ndarray,
     
     result = {'dcor': dcor, 'n': n}
     
-    # 置换检验
     if return_pvalue:
         count = 0
         dcor_obs = dcor
@@ -125,6 +133,30 @@ def distance_correlation(x: np.ndarray,
         
         p_value = (count + 1) / (n_permutations + 1)
         result['p_value'] = p_value
+    
+    if n >= 30:
+        dcor_bootstrap = []
+        
+        for _ in range(n_bootstrap):
+            indices = np.random.choice(n, size=n, replace=True)
+            x_boot = x[indices]
+            y_boot = y[indices]
+            
+            try:
+                dcor_boot = _compute_dcor(x_boot, y_boot)
+                dcor_bootstrap.append(dcor_boot)
+            except Exception:
+                pass
+        
+        if dcor_bootstrap:
+            alpha = 1 - confidence_level
+            lower = np.percentile(dcor_bootstrap, alpha / 2 * 100)
+            upper = np.percentile(dcor_bootstrap, (1 - alpha / 2) * 100)
+            result['confidence_interval'] = (lower, upper)
+        else:
+            result['confidence_interval'] = (np.nan, np.nan)
+    else:
+        result['confidence_interval'] = (np.nan, np.nan)
     
     return result
 

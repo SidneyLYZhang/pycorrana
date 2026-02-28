@@ -18,7 +18,8 @@ pycorrana/
 │   │   ├── visualizer.py       # 可视化（热力图、散点图等）
 │   │   ├── reporter.py         # 报告生成（Excel/HTML/Markdown）
 │   │   ├── partial_corr.py     # 偏相关分析
-│   │   └── nonlinear.py        # 非线性依赖检测
+│   │   ├── nonlinear.py        # 非线性依赖检测
+│   │   └── cca.py              # 典型相关分析
 │   ├── utils/                  # 工具函数
 │   │   ├── data_utils.py       # 数据处理（加载、清洗、类型推断）
 │   │   ├── stats_utils.py      # 统计工具（p值校正、系数解释）
@@ -126,7 +127,21 @@ pycorrana/
 - `nonlinear_dependency_report()`: 非线性依赖报告
 - `NonlinearAnalyzer`: 非线性分析器类
 
-#### 3.6 large_data.py - 大数据优化
+#### 3.6 cca.py - 典型相关分析
+
+**主要函数/类：**
+- `cca()`: 执行典型相关分析
+- `cca_permutation_test()`: 置换检验验证显著性
+- `CCAAnalyzer`: 典型相关分析器类
+
+**关键功能：**
+- 计算两组变量之间的典型相关系数
+- Wilks' Lambda 显著性检验
+- Fisher Z 变换置信区间
+- 冗余指数（Redundancy Index）计算
+- 典型变量系数和得分
+
+#### 3.7 large_data.py - 大数据优化
 
 **主要函数/类：**
 - `LargeDataConfig`: 大数据配置类
@@ -246,6 +261,7 @@ pycorrana
 | 交互式分析 | `pycorrana-interactive` |
 | 控制混淆变量 | `partial_corr(df, x, y, covars)` |
 | 检测非线性 | `nonlinear_dependency_report(df)` |
+| 两组变量关系 | `cca(df[X_vars], df[Y_vars])` |
 | 大数据集 | `CorrAnalyzer(df, large_data_config=config)` |
 
 ### 10. 性能考虑

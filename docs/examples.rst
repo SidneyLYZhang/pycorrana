@@ -266,7 +266,6 @@
    print(f"互信息: {mi:.4f}")
 
 最大信息系数
-最大信息系数
 ------------
 
 .. code-block:: python
@@ -375,6 +374,114 @@
    analyzer = CorrAnalyzer(df)
    result = analyzer.fit()
    analyzer.plot_heatmap(cluster=True)
+
+典型相关分析示例
+================
+
+基本 CCA 分析
+-------------
+
+.. code-block:: python
+
+   from pycorrana import cca, load_iris
+
+   df = load_iris()
+   
+   # 定义两组变量
+   X = df[['sepal_length', 'sepal_width']]
+   Y = df[['petal_length', 'petal_width']]
+   
+   # 执行典型相关分析
+   result = cca(X, Y)
+   
+   print("典型相关系数:", result['canonical_correlations'])
+   # 输出: [0.9409, 0.1222]
+
+查看详细结果
+------------
+
+.. code-block:: python
+
+   result = cca(X, Y)
+   
+   # 典型相关系数
+   print("典型相关系数:")
+   for i, r in enumerate(result['canonical_correlations']):
+       print(f"  第 {i+1} 对: {r:.4f}")
+   
+   # X 变量的典型系数
+   print("\nX 变量典型系数:")
+   print(result['x_weights'])
+   
+   # Y 变量的典型系数
+   print("\nY 变量典型系数:")
+   print(result['y_weights'])
+   
+   # 显著性检验
+   print("\n显著性检验:")
+   for test in result['significance_tests']:
+       print(f"  典型相关 {test['canonical_index'] + 1}: "
+             f"Wilks' λ = {test['wilks_lambda']:.4f}, "
+             f"p = {test['p_value']:.4f}")
+
+置换检验
+--------
+
+.. code-block:: python
+
+   from pycorrana import cca_permutation_test
+
+   result = cca_permutation_test(
+       X, Y,
+       n_permutations=1000,
+       random_state=42
+   )
+   
+   print("原始典型相关系数:", result['canonical_correlations'])
+   print("置换检验 p 值:", result['permutation_pvalues'])
+
+使用 CCAAnalyzer 类
+-------------------
+
+.. code-block:: python
+
+   from pycorrana import CCAAnalyzer
+
+   analyzer = CCAAnalyzer()
+   result = analyzer.fit(X, Y)
+   
+   # 获取典型变量得分
+   scores_x, scores_y = analyzer.get_scores(X, Y)
+   
+   # 典型变量相关性
+   print("典型变量得分相关性:")
+   print(scores_x.corrwith(scores_y))
+
+实际应用示例
+------------
+
+分析心理健康数据：
+
+.. code-block:: python
+
+   from pycorrana import cca
+   import pandas as pd
+
+   df = pd.read_csv('psychology_data.csv')
+   
+   # 心理测量变量
+   psychological = df[['anxiety', 'depression', 'stress']]
+   
+   # 生理测量变量
+   physiological = df[['heart_rate', 'blood_pressure', 'cortisol']]
+   
+   result = cca(psychological, physiological)
+   
+   print("心理-生理典型相关系数:", result['canonical_correlations'])
+   
+   # 解读第一对典型变量
+   print("\n心理变量权重:", result['x_weights'][:, 0])
+   print("生理变量权重:", result['y_weights'][:, 0])
 
 高级用法
 ========

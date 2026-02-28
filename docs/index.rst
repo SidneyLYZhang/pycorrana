@@ -28,6 +28,8 @@ PyCorrAna 是一个方便快速入手的 Python 相关性分析工具，核心�
 - **结果导出** - Excel/CSV/HTML/Markdown 结果
 - **偏相关分析** - 控制协变量后的净相关分析
 - **非线性检测** - 距离相关、互信息、MIC
+- **典型相关分析** - 两组变量之间的相关性分析（CCA）
+- **示例数据集** - 内置鸢尾花、泰坦尼克号、葡萄酒等经典数据集
 - **大数据优化** - 智能采样、分块计算、内存优化
 
 目录
@@ -77,6 +79,26 @@ PyCorrAna 是一个方便快速入手的 Python 相关性分析工具，核心�
 .. code-block:: python
 
    result = quick_corr(df, target='sales')
+
+使用内置数据集：
+
+.. code-block:: python
+
+   from pycorrana import load_iris, quick_corr
+
+   df = load_iris()
+   result = quick_corr(df, target='petal_length')
+
+典型相关分析：
+
+.. code-block:: python
+
+   from pycorrana import cca, load_iris
+
+   df = load_iris()
+   X = df[['sepal_length', 'sepal_width']]
+   Y = df[['petal_length', 'petal_width']]
+   result = cca(X, Y)
 
 大数据优化：
 

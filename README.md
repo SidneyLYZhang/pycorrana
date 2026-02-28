@@ -44,6 +44,7 @@ PyCorrAna 是一个**方便快速入手**的 Python 相关性分析工具，核�
 | **结果导出** | Excel/CSV/HTML/Markdown 结果 |
 | **偏相关分析** | 控制协变量后的净相关分析 |
 | **非线性检测** | 距离相关、互信息、MIC（纯Python实现） |
+| **典型相关分析** | 两组变量间的多元相关性分析（CCA） |
 | **大数据优化** | 智能采样、分块计算、内存优化 |
 
 ---
@@ -271,6 +272,39 @@ outliers = detect_outliers(
 )
 ```
 
+### 示例 8: 典型相关分析 (CCA)
+
+```python
+from pycorrana import cca, cca_permutation_test, CCAAnalyzer
+
+# 典型相关分析：研究两组变量之间的关系
+# 例如：身体指标（身高、体重）与运动能力（速度、力量）
+X_vars = ['height', 'weight', 'age']
+Y_vars = ['speed', 'strength', 'endurance']
+
+result = cca(
+    df[X_vars], 
+    df[Y_vars],
+    compute_significance=True,
+    confidence_level=0.95
+)
+
+# 查看典型相关系数
+print("典型相关系数:", result['canonical_correlations'])
+
+# 查看显著性检验结果
+for test in result['significance_tests']:
+    print(f"第{test['canonical_index']}典型相关: r={test['canonical_correlation']:.3f}, p={test['p_value']:.4f}")
+
+# 查看冗余指数（解释方差比例）
+print("X被Y解释的冗余:", result['redundancy_X_given_Y'])
+print("Y被X解释的冗余:", result['redundancy_Y_given_X'])
+
+# 置换检验（更稳健的显著性验证）
+perm_result = cca_permutation_test(df[X_vars], df[Y_vars], n_permutations=1000)
+print(f"置换检验 p 值: {perm_result['p_value']:.4f}")
+```
+
 ---
 
 ## 自动方法选择规则
@@ -298,7 +332,8 @@ pycorrana/
 │   │   ├── visualizer.py     # 可视化
 │   │   ├── reporter.py       # 报告生成
 │   │   ├── partial_corr.py   # 偏相关分析
-│   │   └── nonlinear.py      # 非线性检测
+│   │   ├── nonlinear.py      # 非线性检测
+│   │   └── cca.py            # 典型相关分析
 │   ├── utils/                # 工具函数
 │   │   ├── data_utils.py     # 数据处理
 │   │   ├── stats_utils.py    # 统计工具

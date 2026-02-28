@@ -1,6 +1,6 @@
 [project]
 name = "pycorrana"
-version = "0.1.6"
+version = "0.1.9"
 description = "Python Correlation Analysis Toolkit - 自动化相关性分析工具"
 readme = "README.md"
 license = {text = "MIT"}

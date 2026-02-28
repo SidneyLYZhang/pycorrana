@@ -123,10 +123,10 @@ nonlinear - 非线性检测
 
 选项：
 
-- ``--top N`` - 显示前 N 个最强的非线性关系
-- ``--method METHOD`` - 检测方法（dcor/mi/mic/all）
-- ``--threshold VALUE`` - 显著性阈值
-- ``--output PATH`` - 输出文件路径
+- ``--columns, -c COL1,COL2`` - 指定分析的列，逗号分隔
+- ``--methods, -m METHODS`` - 检测方法，逗号分隔（dcor/mi/mic）
+- ``--top N`` - 显示前 N 个最强的非线性关系（默认 10）
+- ``--export, -e PATH`` - 导出结果路径
 
 示例：
 
@@ -134,7 +134,9 @@ nonlinear - 非线性检测
 
    pycorrana nonlinear data.csv --top 20
 
-   pycorrana nonlinear data.csv --method dcor --threshold 0.3
+   pycorrana nonlinear data.csv -c col1,col2,col3 -m dcor,mic
+
+   pycorrana nonlinear data.xlsx --top 15 --export nonlinear_results.csv
 
 info - 数据信息
 ~~~~~~~~~~~~~~~
@@ -143,14 +145,30 @@ info - 数据信息
 
 .. code-block:: bash
 
+   pycorrana info data.csv [options]
+
+选项：
+
+- ``--types`` - 显示类型推断结果
+- ``--missing`` - 显示缺失值详细信息
+
+示例：
+
+.. code-block:: bash
+
    pycorrana info data.csv
+
+   pycorrana info data.xlsx --types --missing
 
 输出包括：
 
-- 数据维度
+- 数据维度（行数、列数）
 - 列名和数据类型
-- 缺失值统计
-- 基本统计描述
+- 非空值数量
+- 缺失值数量和比例
+- 唯一值数量
+- 类型推断结果（可选）
+- 缺失值详情（可选）
 
 交互式工具
 ==========

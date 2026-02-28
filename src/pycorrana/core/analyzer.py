@@ -562,6 +562,129 @@ class CorrAnalyzer:
             self.methods_used
         )
     
+    def cca(self,
+            x_vars: List[str],
+            y_vars: List[str],
+            compute_significance: bool = True,
+            confidence_level: float = 0.95,
+            n_permutations: int = 1000) -> Dict:
+        """
+        执行典型相关分析（Canonical Correlation Analysis, CCA）。
+        
+        典型相关分析用于研究两组变量之间的线性关系。它寻找两组变量的
+        线性组合（典型变量），使得这些组合之间的相关性最大化。
+        
+        Parameters
+        ----------
+        x_vars : list
+            第一组变量名列表
+        y_vars : list
+            第二组变量名列表
+        compute_significance : bool, default=True
+            是否计算显著性检验（p值）
+        confidence_level : float, default=0.95
+            置信区间水平
+        n_permutations : int, default=1000
+            置换检验次数
+            
+        Returns
+        -------
+        dict
+            CCA分析结果，包含：
+            - canonical_correlations: 典型相关系数数组
+            - x_weights: X的典型变量系数
+            - y_weights: Y的典型变量系数
+            - x_scores: X的典型变量得分
+            - y_scores: Y的典型变量得分
+            - significance_tests: 显著性检验结果
+            - confidence_intervals: 置信区间
+            - redundancy: 冗余分析结果
+            
+        Examples
+        --------
+        >>> analyzer = CorrAnalyzer(df)
+        >>> analyzer.fit()
+        >>> cca_result = analyzer.cca(x_vars=['var1', 'var2'], y_vars=['var3', 'var4'])
+        >>> print(cca_result['canonical_correlations'])
+        
+        References
+        ----------
+        Hotelling, H. (1936). "Relations between two sets of variates"
+        Biometrika, 28(3/4), 321-377
+        """
+        from .cca import cca as _cca
+        
+        missing_x = [v for v in x_vars if v not in self.data.columns]
+        missing_y = [v for v in y_vars if v not in self.data.columns]
+        
+        if missing_x:
+            raise ValueError(f"X变量不存在于数据中: {missing_x}")
+        if missing_y:
+            raise ValueError(f"Y变量不存在于数据中: {missing_y}")
+        
+        X = self.data[x_vars]
+        Y = self.data[y_vars]
+        
+        if self.verbose:
+            print(f"\n执行典型相关分析...")
+            print(f"  X变量: {x_vars}")
+            print(f"  Y变量: {y_vars}")
+        
+        result = _cca(
+            X, Y,
+            compute_significance=compute_significance,
+            confidence_level=confidence_level,
+            n_permutations=n_permutations,
+            verbose=self.verbose
+        )
+        
+        return result
+    
+    def cca_summary(self,
+                    x_vars: List[str],
+                    y_vars: List[str],
+                    compute_significance: bool = True,
+                    confidence_level: float = 0.95) -> str:
+        """
+        执行典型相关分析并生成摘要报告。
+        
+        Parameters
+        ----------
+        x_vars : list
+            第一组变量名列表
+        y_vars : list
+            第二组变量名列表
+        compute_significance : bool, default=True
+            是否计算显著性检验
+        confidence_level : float, default=0.95
+            置信区间水平
+            
+        Returns
+        -------
+        str
+            分析摘要文本
+        """
+        from .cca import CCAAnalyzer
+        
+        missing_x = [v for v in x_vars if v not in self.data.columns]
+        missing_y = [v for v in y_vars if v not in self.data.columns]
+        
+        if missing_x:
+            raise ValueError(f"X变量不存在于数据中: {missing_x}")
+        if missing_y:
+            raise ValueError(f"Y变量不存在于数据中: {missing_y}")
+        
+        X = self.data[x_vars]
+        Y = self.data[y_vars]
+        
+        analyzer = CCAAnalyzer(X, Y, verbose=self.verbose)
+        analyzer.fit(
+            compute_significance=compute_significance,
+            confidence_level=confidence_level
+        )
+        
+        return analyzer.summary()
+    
     def __repr__(self):
         return f"CorrAnalyzer(data_shape={self.data.shape}, method='{self.method}')"
 

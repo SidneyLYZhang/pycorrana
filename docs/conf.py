@@ -7,8 +7,8 @@ project = 'PyCorrAna'
 copyright = '2025, Sidney Zhang'
 author = 'Sidney Zhang'
 
-release = '0.1.0'
-version = '0.1.0'
+release = '0.1.6'
+version = '0.1.6'
 
 extensions = [
     'sphinx.ext.autodoc',
@@ -34,7 +34,6 @@ pygments_style = 'sphinx'
 html_theme = 'sphinx_rtd_theme'
 html_theme_options = {
     'logo_only': False,
-    'display_version': True,
     'prev_next_buttons_location': 'bottom',
     'style_external_links': False,
     'collapse_navigation': True,

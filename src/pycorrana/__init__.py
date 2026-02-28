@@ -23,7 +23,7 @@ PyCorrAna - Python Correlation Analysis Toolkit
 $ pycorrana-interactive
 """
 
-__version__ = "0.1.6"
+__version__ = "0.1.9"
 __author__ = "SidneyZhang<zly@lyzhang.me>"
 
 from .core.analyzer import quick_corr, CorrAnalyzer
@@ -40,6 +40,11 @@ from .core.nonlinear import (
     nonlinear_dependency_report,
     NonlinearAnalyzer
 )
+from .core.cca import (
+    cca,
+    cca_permutation_test,
+    CCAAnalyzer
+)
 from .datasets import load_iris, load_titanic, load_wine, make_correlated_data, list_datasets
 
 __all__ = [
@@ -54,6 +59,9 @@ __all__ = [
     'maximal_information_coefficient',
     'nonlinear_dependency_report',
     'NonlinearAnalyzer',
+    'cca',
+    'cca_permutation_test',
+    'CCAAnalyzer',
     'load_iris',
     'load_titanic',
     'load_wine',

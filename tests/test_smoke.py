@@ -34,7 +34,7 @@ class TestSmokeWheel(unittest.TestCase):
         import pycorrana
         
         self.assertIsNotNone(pycorrana.__version__)
-        self.assertEqual(pycorrana.__version__, "0.1.6")
+        self.assertEqual(pycorrana.__version__, "0.1.9")
     
     def test_import_core_modules(self):
         """Test that core modules can be imported"""
@@ -43,12 +43,14 @@ class TestSmokeWheel(unittest.TestCase):
         from pycorrana.core import reporter
         from pycorrana.core import partial_corr
         from pycorrana.core import nonlinear
+        from pycorrana.core import cca
         
         self.assertIsNotNone(analyzer)
         self.assertIsNotNone(visualizer)
         self.assertIsNotNone(reporter)
         self.assertIsNotNone(partial_corr)
         self.assertIsNotNone(nonlinear)
+        self.assertIsNotNone(cca)
     
     def test_import_utils_modules(self):
         """Test that utility modules can be imported"""
@@ -107,6 +109,18 @@ class TestSmokeWheel(unittest.TestCase):
         self.assertTrue(callable(maximal_information_coefficient))
         self.assertTrue(callable(nonlinear_dependency_report))
         self.assertTrue(callable(NonlinearAnalyzer))
+    
+    def test_cca_functions_exist(self):
+        """Test that CCA functions are available"""
+        from pycorrana import (
+            cca,
+            cca_permutation_test,
+            CCAAnalyzer
+        )
+        
+        self.assertTrue(callable(cca))
+        self.assertTrue(callable(cca_permutation_test))
+        self.assertTrue(callable(CCAAnalyzer))
     
     def test_dataset_functions_exist(self):
         """Test that dataset functions are available"""
@@ -225,27 +239,122 @@ class TestSmokeWheel(unittest.TestCase):
         self.assertIsInstance(result2['confidence_interval'], tuple)
         self.assertEqual(len(result2['confidence_interval']), 2)
     
-    def test_distance_correlation_with_pvalue(self):
-        """Test distance_correlation with p-value"""
+    def test_distance_correlation_with_pvalue_and_ci(self):
+        """Test distance_correlation with p-value and confidence interval"""
         from pycorrana import distance_correlation
         
-        # 创建相关数据
         x = np.random.randn(100)
         y = x**2 + np.random.randn(100) * 0.1
         
-        # 测试不返回p值
         result1 = distance_correlation(x, y, return_pvalue=False)
         self.assertIn('dcor', result1)
+        self.assertIn('confidence_interval', result1)
         self.assertNotIn('p_value', result1)
         
-        # 测试返回p值
         result2 = distance_correlation(x, y, return_pvalue=True, n_permutations=100)
         self.assertIn('dcor', result2)
         self.assertIn('p_value', result2)
+        self.assertIn('confidence_interval', result2)
         
-        # 验证p值在合理范围内
         self.assertGreaterEqual(result2['p_value'], 0.0)
         self.assertLessEqual(result2['p_value'], 1.0)
+        
+        self.assertIsInstance(result2['confidence_interval'], tuple)
+        self.assertEqual(len(result2['confidence_interval']), 2)
+        
+        ci = result2['confidence_interval']
+        if not (isinstance(ci[0], float) and np.isnan(ci[0])):
+            self.assertGreaterEqual(ci[0], 0.0)
+            self.assertLessEqual(ci[1], 1.0)
+            self.assertLessEqual(ci[0], ci[1])
+    
+    def test_cca_basic_functionality(self):
+        """Test CCA basic functionality with p-value and confidence interval"""
+        from pycorrana import cca, CCAAnalyzer
+        
+        np.random.seed(42)
+        n = 100
+        
+        X = np.random.randn(n, 3)
+        Y = np.random.randn(n, 2)
+        Y[:, 0] = 0.8 * X[:, 0] + 0.2 * np.random.randn(n)
+        
+        result = cca(X, Y, compute_significance=True, verbose=False)
+        
+        self.assertIn('canonical_correlations', result)
+        self.assertIn('x_weights', result)
+        self.assertIn('y_weights', result)
+        self.assertIn('x_scores', result)
+        self.assertIn('y_scores', result)
+        self.assertIn('significance_tests', result)
+        self.assertIn('confidence_intervals', result)
+        self.assertIn('redundancy', result)
+        
+        self.assertEqual(len(result['canonical_correlations']), 2)
+        
+        for r in result['canonical_correlations']:
+            self.assertGreaterEqual(r, 0.0)
+            self.assertLessEqual(r, 1.0)
+        
+        for ci in result['confidence_intervals']:
+            self.assertIsInstance(ci, tuple)
+            self.assertEqual(len(ci), 2)
+            self.assertLessEqual(ci[0], ci[1])
+        
+        for test in result['significance_tests']:
+            self.assertIn('p_value', test)
+            self.assertGreaterEqual(test['p_value'], 0.0)
+            self.assertLessEqual(test['p_value'], 1.0)
+    
+    def test_cca_analyzer_class(self):
+        """Test CCAAnalyzer class functionality"""
+        from pycorrana import CCAAnalyzer
+        import pandas as pd
+        
+        np.random.seed(42)
+        n = 100
+        
+        X = pd.DataFrame(np.random.randn(n, 3), columns=['X1', 'X2', 'X3'])
+        Y = pd.DataFrame(np.random.randn(n, 2), columns=['Y1', 'Y2'])
+        
+        analyzer = CCAAnalyzer(X, Y, verbose=False)
+        result = analyzer.fit()
+        
+        self.assertIsNotNone(analyzer.result)
+        
+        summary = analyzer.summary()
+        self.assertIsInstance(summary, str)
+        self.assertIn('典型相关系数', summary)
+        
+        x_weights, y_weights = analyzer.get_weights(component=1)
+        self.assertIsInstance(x_weights, pd.DataFrame)
+        self.assertIsInstance(y_weights, pd.DataFrame)
+        
+        x_scores, y_scores = analyzer.get_scores()
+        self.assertIsInstance(x_scores, pd.DataFrame)
+        self.assertIsInstance(y_scores, pd.DataFrame)
+    
+    def test_cca_in_corr_analyzer(self):
+        """Test CCA integration in CorrAnalyzer"""
+        from pycorrana import CorrAnalyzer
+        import pandas as pd
+        
+        np.random.seed(42)
+        n = 100
+        
+        data = np.random.randn(n, 5)
+        df = pd.DataFrame(data, columns=['A', 'B', 'C', 'D', 'E'])
+        
+        analyzer = CorrAnalyzer(df, verbose=False)
+        
+        result = analyzer.cca(x_vars=['A', 'B'], y_vars=['D', 'E'])
+        
+        self.assertIn('canonical_correlations', result)
+        self.assertIn('significance_tests', result)
+        self.assertIn('confidence_intervals', result)
+        
+        summary = analyzer.cca_summary(x_vars=['A', 'B'], y_vars=['D', 'E'])
+        self.assertIsInstance(summary, str)
     
     def test_cli_entry_points(self):
         """Test that CLI entry points are registered"""
@@ -384,6 +493,9 @@ class TestSmokePackageMetadata(unittest.TestCase):
             'maximal_information_coefficient',
             'nonlinear_dependency_report',
             'NonlinearAnalyzer',
+            'cca',
+            'cca_permutation_test',
+            'CCAAnalyzer',
             'load_iris',
             'load_titanic',
             'load_wine',

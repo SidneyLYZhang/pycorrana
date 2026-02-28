@@ -82,6 +82,31 @@ NonlinearAnalyzer 类
    :members:
    :inherited-members:
 
+典型相关分析模块
+================
+
+.. module:: pycorrana.core.cca
+
+典型相关分析（Canonical Correlation Analysis, CCA）是一种多元统计方法，
+用于研究两组变量之间的线性关系。它寻找两组变量的线性组合，使得这些组合之间的相关性最大化。
+
+cca 函数
+--------
+
+.. autofunction:: pycorrana.cca
+
+cca_permutation_test 函数
+-------------------------
+
+.. autofunction:: pycorrana.cca_permutation_test
+
+CCAAnalyzer 类
+--------------
+
+.. autoclass:: pycorrana.CCAAnalyzer
+   :members:
+   :inherited-members:
+
 可视化模块
 ==========
 

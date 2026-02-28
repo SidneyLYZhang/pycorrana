@@ -325,6 +325,26 @@ PyCorrAna 提供了命令行工具，无需编写代码即可进行分析：
    
    report = nonlinear_dependency_report(df)
 
+典型相关分析
+------------
+
+分析两组变量之间的相关性：
+
+.. code-block:: python
+
+   from pycorrana import cca, load_iris
+
+   df = load_iris()
+   
+   # 定义两组变量
+   X = df[['sepal_length', 'sepal_width']]
+   Y = df[['petal_length', 'petal_width']]
+   
+   # 执行典型相关分析
+   result = cca(X, Y)
+   
+   print("典型相关系数:", result['canonical_correlations'])
+
 下一步
 ======
 

@@ -6,7 +6,7 @@
 
 import os
 import sys
-from typing import Optional
+from typing import Optional, Dict, Any, List, Tuple
 
 import pandas as pd
 import numpy as np
@@ -17,6 +17,7 @@ from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.prompt import Prompt, Confirm, IntPrompt, FloatPrompt
 
+from .. import __version__
 from ..core.analyzer import quick_corr, CorrAnalyzer
 from ..core.partial_corr import PartialCorrAnalyzer
 from ..core.nonlinear import NonlinearAnalyzer
@@ -32,11 +33,67 @@ app = typer.Typer(
 console = Console()
 
 
-@app.callback()
-def main(ctx: typer.Context):
-    """PyCorrAna 交互式相关性分析工具"""
-    if ctx.invoked_subcommand is None:
-        ctx.invoke(start)
+def show_menu(title: str, options: List[Tuple[str, str]], add_exit: bool = True) -> Optional[str]:
+    """
+    显示菜单并获取用户选择
+    
+    Parameters
+    ----------
+    title : str
+        菜单标题
+    options : List[Tuple[str, str]]
+        选项列表，每个元素为 (显示文本, 返回值)
+    add_exit : bool
+        是否添加退出选项
+    
+    Returns
+    -------
+    Optional[str]
+        用户选择的返回值，退出时返回 None
+    """
+    console.print()
+    table = Table(show_header=True, header_style="bold blue", box=None)
+    table.add_column("选项", style="cyan", width=6)
+    table.add_column(title, style="white")
+    
+    choices = []
+    for i, (desc, _) in enumerate(options, 1):
+        table.add_row(str(i), desc)
+        choices.append(str(i))
+    
+    if add_exit:
+        table.add_row("0", "[dim]退出/返回[/dim]")
+        choices.append("0")
+    
+    console.print(table)
+    
+    choice = Prompt.ask("\n请选择", choices=choices, default="1")
+    
+    if choice == "0":
+        return None
+    
+    return options[int(choice) - 1][1]
+
+
+def show_header(title: str):
+    """显示标题"""
+    console.clear()
+    console.print(Panel.fit(
+        f"[bold cyan]{title}[/bold cyan]",
+        border_style="cyan",
+    ))
+
+
+def show_data_table(title: str, data: Dict[str, Any], style: str = "cyan"):
+    """显示数据表格"""
+    table = Table(title=title, show_header=True, header_style="bold magenta")
+    table.add_column("属性", style=style)
+    table.add_column("值", style="green")
+    
+    for key, value in data.items():
+        table.add_row(key, str(value))
+    
+    console.print(table)
 
 
 class InteractiveSession:
@@ -52,20 +109,12 @@ class InteractiveSession:
         self.analyzer: Optional[CorrAnalyzer] = None
         self.results: Optional[dict] = None
     
-    def show_header(self, title: str):
-        """显示标题"""
-        console.clear()
-        console.print(Panel.fit(
-            f"[bold cyan]{title}[/bold cyan]",
-            border_style="cyan",
-        ))
-    
     def show_welcome(self):
         """显示欢迎界面"""
         console.clear()
         console.print(Panel.fit(
-            "[bold green]PyCorrAna - 交互式相关性分析工具[/bold green]\n"
-            "[dim]自动化相关性分析，降低决策成本[/dim]",
+            f"[bold green]PyCorrAna - 交互式相关性分析工具[/bold green]\n"
+            f"[dim]版本 {__version__} | 自动化相关性分析，降低决策成本[/dim]",
             border_style="green",
         ))
         console.print()
@@ -76,15 +125,11 @@ class InteractiveSession:
             console.print("[yellow]尚未加载数据[/yellow]")
             return
         
-        table = Table(title="数据概览", show_header=True, header_style="bold magenta")
-        table.add_column("属性", style="cyan")
-        table.add_column("值", style="green")
-        
-        table.add_row("行数", str(len(self.data)))
-        table.add_row("列数", str(len(self.data.columns)))
-        table.add_row("列名", ", ".join(self.data.columns[:5]) + ("..." if len(self.data.columns) > 5 else ""))
-        
-        console.print(table)
+        show_data_table("数据概览", {
+            "行数": len(self.data),
+            "列数": len(self.data.columns),
+            "列名": ", ".join(self.data.columns[:5]) + ("..." if len(self.data.columns) > 5 else "")
+        })
     
     def load_from_file(self, path: str) -> bool:
         """从文件加载数据"""
@@ -156,121 +201,59 @@ class InteractiveSession:
         df['B'] = df['A'] * 0.7 + np.random.randn(n) * 0.5
         df['C'] = df['A']**2 + np.random.randn(n) * 0.3
         return df
+    
+    def require_data(self) -> bool:
+        """检查是否已加载数据"""
+        if self.data is None:
+            console.print("[red]请先加载数据！[/red]")
+            return False
+        return True
+    
+    def require_analyzer(self) -> bool:
+        """检查是否已执行分析"""
+        if self.analyzer is None or self.analyzer.corr_matrix is None:
+            console.print("[red]请先执行相关性分析！[/red]")
+            return False
+        return True
 
 
 session = InteractiveSession()
 
 
-@app.command()
-def start():
-    """启动交互式分析会话"""
-    session.show_welcome()
-    
-    if not step_load_data():
-        console.print("\n[yellow]已取消数据加载[/yellow]")
-        raise typer.Exit(0)
-    
-    while True:
-        choice = show_main_menu()
-        
-        if choice is None:
-            console.print("\n[green]感谢使用 PyCorrAna！再见！[/green]")
-            break
-        
-        try:
-            execute_action(choice)
-        except Exception as e:
-            console.print(f"\n[red]错误: {e}[/red]")
-            if Confirm.ask("是否继续？", default=True):
-                continue
-            else:
-                break
-
-
-def show_main_menu() -> Optional[str]:
-    """显示主菜单"""
-    console.print()
-    table = Table(show_header=True, header_style="bold blue", box=None)
-    table.add_column("选项", style="cyan", width=6)
-    table.add_column("功能", style="white")
-    
-    options = [
-        ("1", "执行完整分析", "full"),
-        ("2", "数据探索", "explore"),
-        ("3", "数据清洗", "clean"),
-        ("4", "相关性分析", "corr"),
-        ("5", "偏相关分析", "partial"),
-        ("6", "非线性依赖检测", "nonlinear"),
-        ("7", "可视化", "visualize"),
-        ("8", "导出结果", "export"),
-    ]
-    
-    for opt, desc, _ in options:
-        table.add_row(opt, desc)
-    table.add_row("0", "[dim]退出[/dim]")
-    
-    console.print(table)
-    
-    choice = Prompt.ask("\n请选择", choices=["0", "1", "2", "3", "4", "5", "6", "7", "8"], default="1")
-    
-    if choice == "0":
-        return None
-    
-    return options[int(choice) - 1][2]
-
-
 def step_load_data() -> bool:
     """数据加载步骤"""
-    session.show_header("步骤 1: 数据加载")
+    show_header("步骤 1: 数据加载")
     
-    console.print("\n选择数据来源:")
-    table = Table(show_header=False, box=None)
-    table.add_column("选项", style="cyan", width=6)
-    table.add_column("来源", style="white")
-    table.add_row("1", "从文件加载 (CSV/Excel)")
-    table.add_row("2", "使用示例数据集")
-    console.print(table)
+    choice = show_menu("选择数据来源", [
+        ("从文件加载 (CSV/Excel)", "file"),
+        ("使用示例数据集", "sample"),
+    ])
     
-    source = Prompt.ask("请选择", choices=["1", "2"], default="1")
+    if choice is None:
+        return False
     
-    if source == "1":
+    if choice == "file":
         path = Prompt.ask("请输入文件路径")
         return session.load_from_file(path)
     else:
-        console.print("\n选择示例数据集:")
-        table = Table(show_header=False, box=None)
-        table.add_column("选项", style="cyan", width=6)
-        table.add_column("数据集", style="white")
-        table.add_row("1", "鸢尾花数据集 (Iris)")
-        table.add_row("2", "泰坦尼克号数据集 (Titanic)")
-        table.add_row("3", "随机生成的测试数据")
-        console.print(table)
+        dataset_choice = show_menu("选择示例数据集", [
+            ("鸢尾花数据集 (Iris)", "iris"),
+            ("泰坦尼克号数据集 (Titanic)", "titanic"),
+            ("随机生成的测试数据", "random"),
+        ])
         
-        dataset_choice = Prompt.ask("请选择", choices=["1", "2", "3"], default="1")
-        dataset_map = {"1": "iris", "2": "titanic", "3": "random"}
-        return session.load_sample_data(dataset_map[dataset_choice])
-
-
-def execute_action(action: str):
-    """执行选中的操作"""
-    actions = {
-        "full": action_full_analysis,
-        "explore": action_explore,
-        "clean": action_clean,
-        "corr": action_correlation,
-        "partial": action_partial,
-        "nonlinear": action_nonlinear,
-        "visualize": action_visualize,
-        "export": action_export,
-    }
-    
-    if action in actions:
-        actions[action]()
+        if dataset_choice is None:
+            return False
+        
+        return session.load_sample_data(dataset_choice)
 
 
 def action_full_analysis():
     """执行完整分析"""
-    session.show_header("执行完整分析")
+    show_header("执行完整分析")
+    
+    if not session.require_data():
+        return
     
     console.print("\n本流程将自动完成：")
     console.print("  1. 数据预处理")
@@ -278,18 +261,14 @@ def action_full_analysis():
     console.print("  3. 可视化生成")
     console.print("  4. 结果导出")
     
-    console.print("\n选择相关方法:")
-    table = Table(show_header=False, box=None)
-    table.add_column("选项", style="cyan", width=6)
-    table.add_column("方法", style="white")
-    table.add_row("1", "自动选择 (推荐)")
-    table.add_row("2", "Pearson")
-    table.add_row("3", "Spearman")
-    console.print(table)
+    method_choice = show_menu("选择相关方法", [
+        ("自动选择 (推荐)", "auto"),
+        ("Pearson", "pearson"),
+        ("Spearman", "spearman"),
+    ])
     
-    method_choice = Prompt.ask("请选择", choices=["1", "2", "3"], default="1")
-    method_map = {"1": "auto", "2": "pearson", "3": "spearman"}
-    method = method_map[method_choice]
+    if method_choice is None:
+        return
     
     export = Confirm.ask("是否导出结果？", default=True)
     export_path = None
@@ -307,24 +286,20 @@ def action_full_analysis():
         
         session.results = quick_corr(
             session.data,
-            method=method,
+            method=method_choice,
             plot=True,
             export=export_path if export else False,
             verbose=False
         )
     
     console.print("[green]✓[/green] 分析完成！")
-    
-    if session.analyzer is None and hasattr(session, 'results'):
-        pass
 
 
 def action_explore():
     """数据探索"""
-    session.show_header("数据探索")
+    show_header("数据探索")
     
-    if session.data is None:
-        console.print("[red]请先加载数据！[/red]")
+    if not session.require_data():
         return
     
     console.print(f"\n[cyan]数据形状:[/cyan] {session.data.shape}")
@@ -339,7 +314,8 @@ def action_explore():
     console.print("\n[bold]描述性统计:[/bold]")
     desc_table = Table(show_header=True, header_style="bold magenta")
     desc_table.add_column("统计量", style="cyan")
-    for col in session.data.select_dtypes(include=[np.number]).columns[:5]:
+    numeric_cols = session.data.select_dtypes(include=[np.number]).columns[:5]
+    for col in numeric_cols:
         desc_table.add_column(col, style="green")
     
     desc = session.data.describe()
@@ -379,63 +355,54 @@ def action_explore():
 
 def action_clean():
     """数据清洗"""
-    session.show_header("数据清洗")
+    show_header("数据清洗")
     
-    if session.data is None:
-        console.print("[red]请先加载数据！[/red]")
+    if not session.require_data():
         return
     
-    console.print("\n选择清洗操作:")
-    table = Table(show_header=False, box=None)
-    table.add_column("选项", style="cyan", width=6)
-    table.add_column("操作", style="white")
-    table.add_row("1", "处理缺失值")
-    table.add_row("2", "检测异常值")
-    table.add_row("3", "删除列")
-    console.print(table)
+    action = show_menu("选择清洗操作", [
+        ("处理缺失值", "missing"),
+        ("检测异常值", "outliers"),
+        ("删除列", "dropcols"),
+    ])
     
-    action = Prompt.ask("请选择", choices=["1", "2", "3"], default="1")
+    if action is None:
+        return
     
-    if action == "1":
-        console.print("\n选择缺失值处理策略:")
-        table = Table(show_header=False, box=None)
-        table.add_column("选项", style="cyan", width=6)
-        table.add_column("策略", style="white")
-        table.add_row("1", "删除含缺失值的行")
-        table.add_row("2", "用均值填充")
-        table.add_row("3", "用中位数填充")
-        table.add_row("4", "用众数填充")
-        table.add_row("5", "用KNN预测填充")
-        console.print(table)
+    if action == "missing":
+        strategy = show_menu("选择缺失值处理策略", [
+            ("删除含缺失值的行", "drop"),
+            ("用均值填充", "mean"),
+            ("用中位数填充", "median"),
+            ("用众数填充", "mode"),
+            ("用KNN预测填充", "knn"),
+        ])
         
-        strategy = Prompt.ask("请选择", choices=["1", "2", "3", "4", "5"], default="1")
+        if strategy is None:
+            return
         
-        if strategy == "1":
+        if strategy == "drop":
             n_before = len(session.data)
             session.data = session.data.dropna()
             n_after = len(session.data)
             console.print(f"[green]✓[/green] 已删除 {n_before - n_after} 行")
         else:
-            fill_methods = {"2": "mean", "3": "median", "4": "mode", "5": "knn"}
             session.data = handle_missing(
                 session.data,
                 strategy='fill',
-                fill_method=fill_methods[strategy],
+                fill_method=strategy,
                 verbose=True
             )
             console.print("[green]✓[/green] 缺失值处理完成")
     
-    elif action == "2":
-        console.print("\n选择异常值检测方法:")
-        table = Table(show_header=False, box=None)
-        table.add_column("选项", style="cyan", width=6)
-        table.add_column("方法", style="white")
-        table.add_row("1", "IQR方法（四分位距）")
-        table.add_row("2", "Z-Score方法")
-        console.print(table)
+    elif action == "outliers":
+        method = show_menu("选择异常值检测方法", [
+            ("IQR方法（四分位距）", "iqr"),
+            ("Z-Score方法", "zscore"),
+        ])
         
-        method_choice = Prompt.ask("请选择", choices=["1", "2"], default="1")
-        method = "iqr" if method_choice == "1" else "zscore"
+        if method is None:
+            return
         
         numeric_cols = session.data.select_dtypes(include=[np.number]).columns.tolist()
         
@@ -461,7 +428,7 @@ def action_clean():
         console.print(outlier_table)
         console.print(f"\n共检测到 [yellow]{total_outliers}[/yellow] 个异常值")
     
-    elif action == "3":
+    elif action == "dropcols":
         console.print(f"\n当前列: {', '.join(session.data.columns)}")
         cols = Prompt.ask("请输入要删除的列名（逗号分隔）")
         cols_to_drop = [c.strip() for c in cols.split(',')]
@@ -471,25 +438,20 @@ def action_clean():
 
 def action_correlation():
     """相关性分析"""
-    session.show_header("相关性分析")
+    show_header("相关性分析")
     
-    if session.data is None:
-        console.print("[red]请先加载数据！[/red]")
+    if not session.require_data():
         return
     
-    console.print("\n选择相关方法:")
-    table = Table(show_header=False, box=None)
-    table.add_column("选项", style="cyan", width=6)
-    table.add_column("方法", style="white")
-    table.add_row("1", "自动选择 (推荐)")
-    table.add_row("2", "Pearson相关")
-    table.add_row("3", "Spearman相关")
-    table.add_row("4", "Kendall相关")
-    console.print(table)
+    method = show_menu("选择相关方法", [
+        ("自动选择 (推荐)", "auto"),
+        ("Pearson相关", "pearson"),
+        ("Spearman相关", "spearman"),
+        ("Kendall相关", "kendall"),
+    ])
     
-    method_choice = Prompt.ask("请选择", choices=["1", "2", "3", "4"], default="1")
-    method_map = {"1": "auto", "2": "pearson", "3": "spearman", "4": "kendall"}
-    method = method_map[method_choice]
+    if method is None:
+        return
     
     has_target = Confirm.ask("是否指定目标变量？", default=False)
     target = None
@@ -538,10 +500,9 @@ def action_correlation():
 
 def action_partial():
     """偏相关分析"""
-    session.show_header("偏相关分析")
+    show_header("偏相关分析")
     
-    if session.data is None:
-        console.print("[red]请先加载数据！[/red]")
+    if not session.require_data():
         return
     
     console.print(f"\n可用列: {', '.join(session.data.columns)}")
@@ -551,16 +512,13 @@ def action_partial():
     covars_str = Prompt.ask("请输入控制变量（逗号分隔）")
     covars = [c.strip() for c in covars_str.split(',')]
     
-    console.print("\n选择方法:")
-    table = Table(show_header=False, box=None)
-    table.add_column("选项", style="cyan", width=6)
-    table.add_column("方法", style="white")
-    table.add_row("1", "Pearson")
-    table.add_row("2", "Spearman")
-    console.print(table)
+    method = show_menu("选择方法", [
+        ("Pearson", "pearson"),
+        ("Spearman", "spearman"),
+    ])
     
-    method_choice = Prompt.ask("请选择", choices=["1", "2"], default="1")
-    method = "pearson" if method_choice == "1" else "spearman"
+    if method is None:
+        return
     
     console.print("\n[cyan]正在计算偏相关...[/cyan]")
     
@@ -593,10 +551,9 @@ def action_partial():
 
 def action_nonlinear():
     """非线性依赖检测"""
-    session.show_header("非线性依赖检测")
+    show_header("非线性依赖检测")
     
-    if session.data is None:
-        console.print("[red]请先加载数据！[/red]")
+    if not session.require_data():
         return
     
     top_n = IntPrompt.ask("显示前 N 个结果", default=10)
@@ -630,31 +587,28 @@ def action_nonlinear():
 
 def action_visualize():
     """可视化"""
-    session.show_header("可视化")
+    show_header("可视化")
     
-    if session.analyzer is None or session.analyzer.corr_matrix is None:
-        console.print("[red]请先执行相关性分析！[/red]")
+    if not session.require_analyzer():
         return
     
-    console.print("\n选择可视化类型:")
-    table = Table(show_header=False, box=None)
-    table.add_column("选项", style="cyan", width=6)
-    table.add_column("类型", style="white")
-    table.add_row("1", "相关性热力图")
-    table.add_row("2", "散点图矩阵")
-    table.add_row("3", "相关网络图")
-    table.add_row("4", "显著相关对条形图")
-    console.print(table)
+    viz_choice = show_menu("选择可视化类型", [
+        ("相关性热力图", "heatmap"),
+        ("散点图矩阵", "pairplot"),
+        ("相关网络图", "network"),
+        ("显著相关对条形图", "bar"),
+    ])
     
-    viz_choice = Prompt.ask("请选择", choices=["1", "2", "3", "4"], default="1")
+    if viz_choice is None:
+        return
     
     try:
-        if viz_choice == "1":
+        if viz_choice == "heatmap":
             cluster = Confirm.ask("是否进行层次聚类？", default=False)
             session.analyzer.plot_heatmap(cluster=cluster)
             console.print("[green]✓[/green] 热力图已生成")
         
-        elif viz_choice == "2":
+        elif viz_choice == "pairplot":
             numeric_cols = [c for c, t in session.analyzer.type_mapping.items() if t == 'numeric']
             if len(numeric_cols) >= 2:
                 session.analyzer.plot_pairplot(columns=numeric_cols[:6])
@@ -662,7 +616,7 @@ def action_visualize():
             else:
                 console.print("[yellow]数值列不足，无法绘制散点图矩阵[/yellow]")
         
-        elif viz_choice == "3":
+        elif viz_choice == "network":
             threshold = FloatPrompt.ask("请输入网络图阈值", default=0.5)
             session.analyzer.visualizer.plot_correlation_network(
                 session.analyzer.corr_matrix,
@@ -670,7 +624,7 @@ def action_visualize():
             )
             console.print("[green]✓[/green] 相关网络图已生成")
         
-        elif viz_choice == "4":
+        elif viz_choice == "bar":
             session.analyzer.visualizer.plot_significant_pairs(
                 session.analyzer.significant_pairs
             )
@@ -681,25 +635,20 @@ def action_visualize():
 
 def action_export():
     """导出结果"""
-    session.show_header("导出结果")
+    show_header("导出结果")
     
-    if session.analyzer is None or session.analyzer.corr_matrix is None:
-        console.print("[red]请先执行相关性分析！[/red]")
+    if not session.require_analyzer():
         return
     
-    console.print("\n选择导出格式:")
-    table = Table(show_header=False, box=None)
-    table.add_column("选项", style="cyan", width=6)
-    table.add_column("格式", style="white")
-    table.add_row("1", "Excel格式 (.xlsx)")
-    table.add_row("2", "CSV格式")
-    table.add_row("3", "HTML报告")
-    table.add_row("4", "Markdown报告")
-    console.print(table)
+    export_format = show_menu("选择导出格式", [
+        ("Excel格式 (.xlsx)", "excel"),
+        ("CSV格式", "csv"),
+        ("HTML报告", "html"),
+        ("Markdown报告", "markdown"),
+    ])
     
-    format_choice = Prompt.ask("请选择", choices=["1", "2", "3", "4"], default="1")
-    format_map = {"1": "excel", "2": "csv", "3": "html", "4": "markdown"}
-    export_format = format_map[format_choice]
+    if export_format is None:
+        return
     
     ext = "xlsx" if export_format == "excel" else export_format
     default_name = f"correlation_results.{ext}"
@@ -730,6 +679,66 @@ def action_export():
             console.print(f"[green]✓[/green] 已保存Markdown报告: {path}")
     except Exception as e:
         console.print(f"[red]导出失败: {e}[/red]")
+
+
+ACTIONS = {
+    "full": action_full_analysis,
+    "explore": action_explore,
+    "clean": action_clean,
+    "corr": action_correlation,
+    "partial": action_partial,
+    "nonlinear": action_nonlinear,
+    "visualize": action_visualize,
+    "export": action_export,
+}
+
+MAIN_MENU_OPTIONS = [
+    ("执行完整分析", "full"),
+    ("数据探索", "explore"),
+    ("数据清洗", "clean"),
+    ("相关性分析", "corr"),
+    ("偏相关分析", "partial"),
+    ("非线性依赖检测", "nonlinear"),
+    ("可视化", "visualize"),
+    ("导出结果", "export"),
+]
+
+
+@app.callback()
+def main(ctx: typer.Context):
+    """PyCorrAna 交互式相关性分析工具"""
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(start)
+
+
+@app.command()
+def start():
+    """启动交互式分析会话"""
+    session.show_welcome()
+    
+    if not step_load_data():
+        console.print("\n[yellow]已取消数据加载[/yellow]")
+        raise typer.Exit(0)
+    
+    while True:
+        choice = show_menu("功能", MAIN_MENU_OPTIONS)
+        
+        if choice is None:
+            console.print("\n[green]感谢使用 PyCorrAna！再见！[/green]")
+            break
+        
+        try:
+            ACTIONS[choice]()
+        except Exception as e:
+            console.print(f"\n[red]错误: {e}[/red]")
+            if not Confirm.ask("是否继续？", default=True):
+                break
+
+
+@app.command()
+def version():
+    """显示版本信息"""
+    console.print(f"[cyan]PyCorrAna[/cyan] 交互式工具版本 [green]{__version__}[/green]")
 
 
 def interactive_mode():
