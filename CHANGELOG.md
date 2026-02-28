@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **core**: 为相关分析添加置信区间计算与存储  
 
 ### 文档
-- 更新 CHANGELOG，新增 0.1.6 版本发布记录  
+- 更新 CHANGELOG，新增 0.1.9 版本发布记录  
 
 # [0.1.6] - 2026-02-27
 

@@ -339,5 +339,10 @@ def info(
         raise typer.Exit(1)
 
 
-if __name__ == '__main__':
+def main():
+    """CLI入口点"""
     app()
+
+
+if __name__ == '__main__':
+    main()
