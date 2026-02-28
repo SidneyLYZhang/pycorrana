@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9]  - 2026-02-28
+
+### 功能
+- **core**: 新增典型相关分析模块并更新文档  
+- **core**: 为相关分析添加置信区间计算与存储  
+
+### 文档
+- 更新 CHANGELOG，新增 0.1.6 版本发布记录  
+
 # [0.1.6] - 2026-02-27
 
 ## 功能
